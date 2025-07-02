@@ -1,0 +1,40 @@
+from votekit.utils import mentions
+from votekit.pref_profile import PreferenceProfile
+import random
+import numpy as np
+
+def gen_mentions_partition(profile:PreferenceProfile, cands, k):
+    my_mentions= mentions(profile) # this is a dict with keys the string names of candidates and values the number of mentions
+    ncand = len(cands)
+    sorted_candidates = sorted(cands, key=my_mentions.get, reverse=True) #sorted from most mentioned to least mentioned
+    q, r = divmod(ncand, k)
+    # r parts of size q+1, k-r parts of size q
+    bloc_sizes = [q+1]*r + [q]*(k - r)
+    partition = []
+    for L in bloc_sizes:
+        partition.append(sorted_candidates[:L])
+        sorted_candidates = sorted_candidates[L:]
+    return partition
+
+def random_partition(cands, k):
+    shuffled = cands[:]
+    random.shuffle(shuffled)
+    partition = [[] for _ in range(k)]
+    for idx, item in enumerate(shuffled):
+        partition[idx % k].append(item)
+    return partition
+
+def naive_proposal(partition):
+    """Randomly propose a new partition as follows:
+    1. Choose a candidate uniformly at random.
+    2. Choose a slate uniformly at random, and move the candidate to that slate."""
+    candidates = [cand for bloc in partition for cand in bloc]
+    new_partition = [part.copy() for part in partition]
+    random_candidate = candidates[random.randint(0,len(candidates)-1)]
+    random_partition = random.randint(0,len(new_partition)-1)
+    #Remove the random candidate from their partition
+    for part in new_partition:
+        if random_candidate in part:
+            part.remove(random_candidate)
+    new_partition[random_partition].append(random_candidate)
+    return new_partition
