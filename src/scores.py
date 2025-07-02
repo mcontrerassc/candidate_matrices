@@ -37,12 +37,13 @@ def blockiness_mtx(profile: PreferenceProfile, partition):
                    
         blockiness[second_block, first_block] += float(ballot.weight)
 
-    row_sums = blockiness.sum(axis=1)
+    # normalize along the columns 
+    column_sums = blockiness.sum(axis=0)
     normed_blockiness = np.zeros_like(blockiness)
 
     for i in range(len(blockiness)):
-        if row_sums[i] != 0:
-            normed_blockiness[i] = blockiness[i] / row_sums[i]
+        if column_sums[i] != 0:
+            normed_blockiness[i] = blockiness[i] / column_sums[i]
 
     return normed_blockiness
 
@@ -103,6 +104,10 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         candidate_to_index[c2]
                         ]
     return sum
+
+def first_second_score(profile: PreferenceProfile, partitions):
+    score = np.trace(blockiness_mtx(profile, partitions))
+    return score
 
 def combined_score(profile: PreferenceProfile, partition,alpha=1,beta=10000):
     #alpha, beta = 1, 10000 #Change these to balance the objectives!
