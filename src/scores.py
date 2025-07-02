@@ -104,6 +104,6 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         ]
     return sum
 
-def brantley_score(profile: PreferenceProfile, partition):
-    alpha, beta = 1, 10000 #Change these to balance the objectives!
+def combined_score(profile: PreferenceProfile, partition,alpha=1,beta=10000):
+    #alpha, beta = 1, 10000 #Change these to balance the objectives!
     return alpha * cut_score(profile, partition) + beta * relative_size_score(profile, partition)# - np.trace(blockiness_mtx(profile, partition))
