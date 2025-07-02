@@ -14,6 +14,7 @@ def Portland_clean(profile):
 
     # remove UWI's here
     write_in_candidates = [key for key in profile.candidates if str(key).startswith("Write-in")]
+    write_in_candidates += [key for key in profile.candidates if str(key).startswith("Uncertified")]
 
     # Remove and condense write-in candidates
     new_profile = remove_and_condense(write_in_candidates, new_profile)
