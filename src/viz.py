@@ -23,11 +23,15 @@ def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None):
         plt.title(title)
     img = ax.imshow(M, cmap=cmap)
     fig.colorbar(img)
+
+    ordering = [name.split(" ")[-1] if "Write In" not in name
+                                        else "UWI"
+                                        for name in labels]
     if labels:
         ax.set_xticks(range(M.shape[0]))
-        ax.set_xticklabels(labels)
+        ax.set_xticklabels(ordering)
         ax.set_yticks(range(M.shape[1]))
-        ax.set_yticklabels(labels)
+        ax.set_yticklabels(ordering)
         ax.tick_params(axis='x', labelrotation=90)
         ax.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
     ax.set_aspect('auto')
