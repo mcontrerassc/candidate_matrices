@@ -1,6 +1,7 @@
 import numpy as np
 from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
+from itertools import accumulate
 
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
@@ -112,3 +113,56 @@ def first_second_score(profile: PreferenceProfile, partitions):
 def combined_score(profile: PreferenceProfile, partition,alpha=1,beta=10000):
     #alpha, beta = 1, 10000 #Change these to balance the objectives!
     return alpha * cut_score(profile, partition) + beta * relative_size_score(profile, partition)# - np.trace(blockiness_mtx(profile, partition))
+
+
+## distance metric from ``Learning Blocs and Slates from Ranked-Choice Ballots''
+
+## question: do we want to enforce a particular encoding on the slates and ballots?
+def distance_to_slate(ballot, bipartition):
+    '''
+    takes in a ballot and a bi-partition and returns the distance to
+    slate score cited above.
+    args:
+        ballot: Tuple/list; a ranking of the candidates, must include each
+            element of [n] exactly once
+        bipartition: A pair list of size two, containing
+            (sets/tuples?). The union of the substructures must equal
+            [n] (as sets). 
+            The first substructure is considered slate A and the
+            second substructure is considered slate B
+    returns:
+        float: the distance to slate score
+    '''
+    # perhaps do some error hadling on bipartition here
+    slate_A, slate_B = bipartition
+    slate_A_ind = [ballot.index(A_cand) for A_cand in slate_A]
+    slate_B_ind = [ballot.index(B_cand) for B_cand in slate_B]
+
+    # for each B index, count the number of A_indices which lay above
+    numerator = sum([len(list(filter(lambda a_ind: a_ind > B_ind, slate_A_ind))) for B_ind in slate_B_ind])
+
+    return numerator / (len(slate_A) * len(slate_B))
+
+
+def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
+    '''
+        Takes in a bipartition and then computes the distance to slate
+        score across the profile.
+
+        partition: a list of lists which union to the candidates 
+    ''' 
+    
+    # TODO: is this the way we want to handle the distance to slate
+    # score?
+    if len(partition) != 2:
+        raise Exception("More than two blocks given for distance_to_slate_across_profile. Cannot" \
+            "compute distance to slate for more than two blocks")
+
+    # TODO: do we want to compute the distance to slate in both
+    # orientations and return the min/max?
+
+    ballots = profile.ballots()
+    ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
+    ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
+    return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
+    
