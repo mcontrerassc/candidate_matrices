@@ -1,4 +1,4 @@
-from itertools import combinations
+from itertools import combinations, chain
 import numpy as np
 
 # misc functions
@@ -9,17 +9,14 @@ def enumerate_bipartitions(candidates, as_generator = False):
         returns:
             a 2d generator which enumeratees all bipartitions
     '''
-
-    '''
-        let's just do the naive thing and generate the powerset of the
-        candidates. Then we can think about how write it as a
-        generator instead. 
-        Do we want to generate the trivial partitions?
-    '''
-    if as_generator:
-        pass
-    
     # generate the powerset of candidates
-    powerset = [combinations(candidates, r) for r in range(len(candidates) + 1)] 
+    powerset = chain.from_iterable(combinations(candidates, r) for r in range(len(candidates) + 1))
     set_cands = set(candidates)
-    return np.array([np.array([set(subset), set_cands - set(subset)] for subset in powerset)])
+    all_bi_parts = np.array([ [set(subset), set_cands - set(subset)] for subset in powerset ])
+    #return chain.from_iterable(all_bi_parts) if as_generator else
+    #all_bi_parts
+    
+    # TODO: need to implement manual yield to return tuples rather
+    # than using chain constructor. Uncomment the above return line
+    # when ready
+    return all_bi_parts
