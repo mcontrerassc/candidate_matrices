@@ -59,9 +59,9 @@ def tilted_run(profile: PreferenceProfile, partition, score_fn, proposal = naive
                 best_score = float(cur_score)
                 best_partition = [part.copy() for part in cur_partition]
                 #print("New best!")
-        if best_partition is None:
-            print("Chain did not find a better partition. Consider increasing iterations!")
-            return cur_partition
+    if best_partition is None:
+        print("Chain did not find a better partition. Consider increasing iterations!")
+        return cur_partition
     return best_partition
 
 def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num_bursts):
