@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from cdlib import algorithms
 import networkx as nx
+from tools import enumerate_bipartitions
+from scores import distance_to_slate_across_profile
 
 
 def create_graph_louvain_bm(boost: np.ndarray):
@@ -41,3 +43,20 @@ def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolu
             list_cands.append(all_cands_sorted_by_mentions[node])
         partition.append(list_cands)
     return partition
+
+
+def find_distance_to_slate_optimal_bipartition(profile: PreferenceProfile):
+    ''''
+        computes the distance to slate scores for all possible
+            partitions of the given profile, wrt the ballots in the given
+            profile. 
+        returns: list of list containing each partition and its
+        distance to slate scores.
+    '''
+
+    all_bipartitions = enumerate_bipartitions(profile.candidates())
+    distance_to_slate_scores = [distance_to_slate_across_profile(profile, bipart) for bipart in all_bipartitions]
+
+    parts_and_score = list(zip(all_bipartitions, distance_to_slate_scores)) 
+    return sorted(parts_and_score, key=lambda entry: entry[1])
+    

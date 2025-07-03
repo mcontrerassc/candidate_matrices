@@ -151,9 +151,6 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
 
         partition: a list of lists which union to the candidates 
     ''' 
-    
-    # TODO: is this the way we want to handle the distance to slate
-    # score?
     if len(partition) != 2:
         raise Exception("More than two blocks given for distance_to_slate_across_profile. Cannot" \
             "compute distance to slate for more than two blocks")
