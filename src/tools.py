@@ -3,14 +3,19 @@ import numpy as np
 
 # misc functions
 
-def enumerate_bipartitions(candidates, as_generator = False):
+def enumerate_bipartitions(candidates, as_generator = False, disallow_trivial = True):
     '''
-        candidates: a list of candidate names
+        candidates: a list of candidate name
+        as_generator: Flag to indicate that the result should be
+            returned as a generator
+        disallow_trivial: Flag to indicate that we should exclude
+            partitions where one part is empty
         returns:
-            a 2d generator which enumeratees all bipartitions
+            all bipartitions of candidates as a list of lists
     '''
     # generate the powerset of candidates
-    powerset = chain.from_iterable(combinations(candidates, r) for r in range(len(candidates) + 1))
+    comb_range = range(1, len(candidates)) if disallow_trivial else range(len(candidates) + 1)
+    powerset = chain.from_iterable(combinations(candidates, r) for r in comb_range)
     set_cands = set(candidates)
     all_bi_parts = np.array([ [set(subset), set_cands - set(subset)] for subset in powerset ])
     #return chain.from_iterable(all_bi_parts) if as_generator else
