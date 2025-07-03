@@ -22,10 +22,10 @@ def create_graph_louvain_bm(boost: np.ndarray):
 
 
 
-def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile):
+def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolution: float, randomize: bool):
     mentions_dict = mentions(profile)
     all_cands_sorted_by_mentions = sorted(profile.candidates, reverse=True, key = lambda x: mentions_dict[x])
-    partition = algorithms.louvain(G, weight='weight')
+    partition = algorithms.louvain(G, weight='weight', resolution = resolution, randomize = randomize)
     clusters = {}
     for node, clust_ids in partition.to_node_community_map().items():
         clust_id = clust_ids[0] 

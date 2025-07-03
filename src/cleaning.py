@@ -1,5 +1,8 @@
-from votekit.cvr_loaders import load_csv
+from votekit.cvr_loaders import load_csv, load_scottish
 from votekit.cleaning import remove_and_condense
+from votekit.utils import mentions
+from votekit.matrices import boost_matrix 
+import numpy as np
 
 def Portland_clean(profile):
     num_ballots_cast = profile.total_ballot_wt
@@ -22,3 +25,9 @@ def Portland_clean(profile):
     num_ballots_scrubbed_by_wi = num_ballots_cast - num_ballots_spoiled_by_ov_skips-new_profile.total_ballot_wt 
     print(f"{num_ballots_scrubbed_by_wi} ballots, or {num_ballots_scrubbed_by_wi/num_ballots_cast:.1%} of all ballots, were scrubbed by write ins in D1.")
     return new_profile
+
+def Scotland_clean(profile):
+    clean_prof = Portland_clean(profile)
+    scottish_bm  = boost_matrix(profile, candidates = list(profile.candidates))
+    scottish_bm_clean = np.nan_to_num(scottish_bm)
+    return clean_prof, scottish_bm_clean
