@@ -77,3 +77,21 @@ def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num
                 burst_best = trial_step.copy()
                 status_quo = int(quo)
     return burst_best
+
+def forward_convert(partition, cand_dict):
+    """Convert a partition (list of lists) into a numpy int32 array."""
+    array = np.zeros(sum(len(block) for block in partition), dtype=np.int32)
+    for i, bloc in enumerate(partition):
+        for candidate in bloc:
+            array[cand_dict[candidate]] = i
+    return array
+
+def backward_convert(array, cand_dict):
+    """Convert a numpy int32 array back into a partition (list of lists)."""
+    inv_cand_dict = {v: k for k, v in cand_dict.items()}
+    partition = []
+    for i in range(max(array) + 1):
+        bloc = [inv_cand_dict[j] for j in range(len(array)) if array[j] == i]
+        if bloc:
+            partition.append(bloc)
+    return partition
