@@ -164,5 +164,15 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     ballots = profile.ballots()
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
-    return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
+
+    num_ballot_scores = len(ballots_to_distance_first_slate)
+    if num_ballot_scores != len(ballots_to_distance_second_slate):
+        raise Exception("Unexpected error: different number of ballot distance scores for each slate")
+
+    # TODO: is this the correct way to combine the scores for each
+        # partition as defined in the a paper? "choose whichever is
+        # closest"??
+    # TODO: is this done on a per ballot basis or over the entire
+    # ballot?
+    return sum([min(ballots_to_distance_first_slate[i], ballots_to_distance_second_slate[i]) for i in range(num_ballot_scores)])
     
