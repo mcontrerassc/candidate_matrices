@@ -25,3 +25,18 @@ def enumerate_bipartitions(candidates, as_generator = False, disallow_trivial = 
     # than using chain constructor. Uncomment the above return line
     # when ready
     return all_bi_parts
+
+
+def profile_ballots_to_list(ballots):
+    '''
+        Takes in a list of Votekit ballots and converts each ballot to
+        a tuple of strings
+        args:
+            ballots: list of Ballot objects
+        returns:
+            list of tuples
+    '''
+    # TODO: add some type checking to the argument (or at least see
+    # what guarentees votekit gives)
+    # TODO: add some tests
+    return np.array([tuple([list(cand)[0] for cand in bal.ranking]) for bal in ballots])
