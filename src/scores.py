@@ -102,13 +102,16 @@ def fast_adj(profile: PreferenceProfile):
                 adjacencies[good_bal[i], good_bal[i+1]] += w
     return adjacencies
 
-def fast_cut_score(profile: PreferenceProfile, partition32, adjacencies): #this is not quite giving the same number as cut_score... oh well.
-    sum = 0
-    for i, s in enumerate(partition32[:-1]):
-        for j, t in enumerate(partition32[i+1:]):
-            if s!= t:
-                sum += adjacencies[i, j+i+1] + adjacencies[j+i+1, i]
-    return sum
+def cut_score_generator(profile: PreferenceProfile):
+    adjacencies = fast_adj(profile)
+    def fast_cut_score(partition8):
+        sum = 0
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s != t:
+                    sum += adjacencies[i, j+i+1] + adjacencies[j+i+1, i]
+        return sum
+    return fast_cut_score
 
 def cut_score(profile: PreferenceProfile, partitions): #data structure is a list of lists of candidates
     sum = 0
