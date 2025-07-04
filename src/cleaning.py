@@ -24,6 +24,7 @@ def profile_to_boost_and_cands(profile):
 
     # get list of candidates
     candidates = list(new_profile.candidates)
+
     # get boost matrix from profile and cadidates, clean it (replace nans with 0s)
     bm  = boost_matrix(profile, candidates)
     bm_clean = np.nan_to_num(bm)
