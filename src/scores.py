@@ -57,6 +57,13 @@ def gen_share_mentions(profile: PreferenceProfile):
     share_mentions = {key : value/total_mentions for key,value in num_mentions.items()}
     return share_mentions
 
+def new_gen_mentions(profile: PreferenceProfile):
+    num_mentions = mentions(profile)
+    total_mentions = sum(num_mentions.values())
+    canon = list(profile.candidates)
+    share_mentions = {canon.index(key) : value/total_mentions for key,value in num_mentions.items()}
+    return share_mentions
+
 def relative_size_score(profile: PreferenceProfile, partitions):
     share_mentions = gen_share_mentions(profile)
     sizes = []
@@ -68,6 +75,15 @@ def relative_size_score(profile: PreferenceProfile, partitions):
     for size in sizes:
         score *= (size+.1) # add a small constant to avoid division by zero
     return 1/score
+
+def relative_size_score_generator(profile: PreferenceProfile, k):
+    share_mentions = new_gen_mentions(profile)
+    def fast_relative_size_score(partition8):
+        sizes = np.zeros(k)+.01
+        for i, t in enumerate(partition8):
+            sizes[t] += share_mentions[i]
+        return 1/np.prod(sizes)
+    return fast_relative_size_score
 
 def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
     adjacencies = np.zeros((len(candidate_to_index), len(candidate_to_index)))
