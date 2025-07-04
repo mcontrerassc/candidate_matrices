@@ -154,6 +154,12 @@ def combined_score(profile: PreferenceProfile, partition,alpha=1,beta=10000):
     #alpha, beta = 1, 10000 #Change these to balance the objectives!
     return alpha * cut_score(profile, partition) + beta * relative_size_score(profile, partition)# - np.trace(blockiness_mtx(profile, partition))
 
+def combined_score_generator(profile: PreferenceProfile, k, alpha=1, beta=10000):
+    cut_score_fn = cut_score_generator(profile)
+    relative_size_score_fn = relative_size_score_generator(profile, k)
+    def fast_combined_score(partition8):
+        return alpha * cut_score_fn(partition8) + beta * relative_size_score_fn(partition8)
+    return fast_combined_score
 
 ## distance metric from ``Learning Blocs and Slates from Ranked-Choice Ballots''
 
