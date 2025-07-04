@@ -27,7 +27,7 @@ def Portland_clean(profile):
     return new_profile
 
 def Scotland_clean(profile):
-    clean_prof = Portland_clean(profile)
-    scottish_bm  = boost_matrix(profile, candidates = list(profile.candidates))
+    clean_prof = Portland_clean(profile) #lol
+    scottish_bm  = boost_matrix(clean_prof, candidates = list(clean_prof.candidates))
     scottish_bm_clean = np.nan_to_num(scottish_bm)
     return clean_prof, scottish_bm_clean
