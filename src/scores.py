@@ -3,6 +3,9 @@ from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
 
+def bal_to_tuple(ballot, cand_ref): #blame Chris
+    sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
+    return tuple(cand_ref[c] for c in sane_tuple), ballot.weight
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
 # where a candidate from block j was ranked 1st and a candidate from block i was ranked 2nd
