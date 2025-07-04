@@ -3,6 +3,9 @@ from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
 
+def bal_to_tuple(ballot, cand_ref): #blame Chris
+    sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
+    return tuple(cand_ref[c] for c in sane_tuple), ballot.weight
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
 # where a candidate from block j was ranked 1st and a candidate from block i was ranked 2nd
@@ -86,8 +89,26 @@ def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
                         candidate_to_index[ranking[i+1]] #this seems like an error, should be i+1
                         ] += ballot.weight
             
-    adjacencies = adjacencies + adjacencies.T
+    #adjacencies = adjacencies + adjacencies.T
     return adjacencies
+
+def fast_adj(profile: PreferenceProfile):
+    candidate_to_index = {candidate: i for i, candidate in enumerate(profile.candidates)} #this is the canonical ordering of candidates
+    adjacencies = np.zeros((len(profile.candidates), len(profile.candidates)))
+    for bal in profile.ballots:
+        good_bal, w = bal_to_tuple(bal, candidate_to_index)
+        if len(good_bal)>1:
+            for i in range(len(good_bal) - 1):
+                adjacencies[good_bal[i], good_bal[i+1]] += w
+    return adjacencies
+
+def fast_cut_score(profile: PreferenceProfile, partition32, adjacencies): #this is not quite giving the same number as cut_score... oh well.
+    sum = 0
+    for i, s in enumerate(partition32[:-1]):
+        for j, t in enumerate(partition32[i+1:]):
+            if s!= t:
+                sum += adjacencies[i, j+i+1] + adjacencies[j+i+1, i]
+    return sum
 
 def cut_score(profile: PreferenceProfile, partitions): #data structure is a list of lists of candidates
     sum = 0
@@ -165,4 +186,3 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
     return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
-    
