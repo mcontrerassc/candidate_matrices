@@ -2,7 +2,7 @@ import numpy as np
 from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
-
+from src.tools import profile_ballots_to_list
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
 # where a candidate from block j was ranked 1st and a candidate from block i was ranked 2nd
@@ -118,14 +118,19 @@ def combined_score(profile: PreferenceProfile, partition,alpha=1,beta=10000):
 ## distance metric from ``Learning Blocs and Slates from Ranked-Choice Ballots''
 
 ## question: do we want to enforce a particular encoding on the slates and ballots?
+# TODO: decorate this as a helper 
 def distance_to_slate(ballot, bipartition):
     '''
+    Helper for distance_to_slate_across_profile
     takes in a ballot and a bi-partition and returns the distance to
     slate score cited above.
+    Candidates who are not mentioned in ballot are all considered tied
+    an appended last place in the ballot
+    TODO: perhaps add an example computation in this docstring
     args:
         ballot: Tuple/list; a ranking of the candidates, must include each
             element of [n] exactly once
-        bipartition: A pair list of size two, containing
+        bipartition: A list of size two, containing
             (sets/tuples?). The union of the substructures must equal
             [n] (as sets). 
             The first substructure is considered slate A and the
@@ -134,12 +139,23 @@ def distance_to_slate(ballot, bipartition):
         float: the distance to slate score
     '''
     # perhaps do some error hadling on bipartition here
-    slate_A, slate_B = bipartition
-    slate_A_ind = [ballot.index(A_cand) for A_cand in slate_A]
-    slate_B_ind = [ballot.index(B_cand) for B_cand in slate_B]
+    if len(bipartition) != 2:
+        raise Exception("distance to slate give a non-bipartition")
+
+    slate_A = set(bipartition[0])
+    slate_B = set(bipartition[1])
+    # NOTE: not all candidates may be mentioned in the given ballot
+    # we consider unmentioned candidates as tied for last place, where
+    # we add another spot to the ballot for last place
+    candidates = slate_A | slate_B
+    unmentioned_candidates = candidates - set(ballot)
+
+    slate_A_ind = [ballot.index(A_cand) for A_cand in slate_A if A_cand in ballot]
+    slate_B_ind = [ballot.index(B_cand) for B_cand in slate_B if B_cand in ballot]
 
     # for each B index, count the number of A_indices which lay above
-    numerator = sum([len(list(filter(lambda a_ind: a_ind > B_ind, slate_A_ind))) for B_ind in slate_B_ind])
+    unmentioned_score = 0.5 * (len(slate_B & unmentioned_candidates) * len(slate_A & unmentioned_candidates))  # TODO: check if this is the right computation, ie write a test 
+    numerator = sum([len(list(filter(lambda a_ind: a_ind > B_ind, slate_A_ind))) for B_ind in slate_B_ind]) + unmentioned_score
 
     return numerator / (len(slate_A) * len(slate_B))
 
@@ -158,7 +174,8 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     # TODO: do we want to compute the distance to slate in both
     # orientations and return the min/max?
 
-    ballots = profile.ballots()
+    ballots = profile_ballots_to_list(profile.ballots)
+
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
 

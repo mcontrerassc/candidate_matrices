@@ -25,6 +25,45 @@ def random_partition(cands, k):
         partition[idx % k].append(item)
     return partition
 
+
+def random_partition_variable_lengths(cands, part_lengths):
+    '''
+    Randomly partitions the candidates into parts of the given lengths
+    args:
+        cands: an iterable of candidates
+        part_lengths: a list of integers st sum(part_lengths) =
+            len(cands)
+    returns:
+        random partition where each part is of the specified length
+
+    TODO: write some unittests
+    '''
+    if sum(part_lengths) != len(cands):
+        raise Exception("part_lengths not valid")
+
+    result = []
+    for l in part_lengths:
+        part_i = []
+        for i in range(l):
+            part_i.append(cands.pop(random.randint(0,len(cands))-1)) # TODO: check that cands is being passed by value and not by ref
+        result.append(part_i)
+    return result
+
+def random_partition_random_lengths(cands):
+    '''
+    Randomly partitions the given candidates into parts of random size
+    NOTE: this may output the trivial partition (is that what we want?)
+    '''
+    part_lengths = []
+    remaining_lenght = len(cands)
+    while sum(part_lengths) < len(cands):
+        next_part_size = random.randint(1, remaining_lenght)
+        part_lengths.append(next_part_size)
+        remaining_lenght -= next_part_size
+
+    return random_partition_variable_lengths(cands, part_lengths)
+
+
 def naive_proposal(partition):
     """Randomly propose a new partition as follows:
     1. Choose a candidate uniformly at random.

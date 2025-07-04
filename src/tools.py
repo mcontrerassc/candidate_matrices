@@ -27,6 +27,7 @@ def enumerate_bipartitions(candidates, as_generator = False, disallow_trivial = 
     return all_bi_parts
 
 
+# TODO: is this the right name for this method?
 def profile_ballots_to_list(ballots):
     '''
         Takes in a list of Votekit ballots and converts each ballot to
@@ -39,4 +40,8 @@ def profile_ballots_to_list(ballots):
     # TODO: add some type checking to the argument (or at least see
     # what guarentees votekit gives)
     # TODO: add some tests
-    return np.array([tuple([list(cand)[0] for cand in bal.ranking]) for bal in ballots])
+
+    # each ballot.ranking is a tuple of frozen sets
+    # cannot return this as np array because the shape is inhomogenous
+    # we could return it as a generator?
+    return [tuple([list(cand)[0] for cand in bal.ranking]) for bal in ballots]
