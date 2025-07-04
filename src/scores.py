@@ -186,4 +186,3 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
     return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
-    
