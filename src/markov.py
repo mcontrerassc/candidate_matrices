@@ -18,7 +18,7 @@ def gen_mentions_partition(profile:PreferenceProfile, cands, k):
     return partition
 
 def random_partition(cands, k):
-    shuffled = cands[:]
+    shuffled = list(cands)
     random.shuffle(shuffled)
     partition = [[] for _ in range(k)]
     for idx, item in enumerate(shuffled):
