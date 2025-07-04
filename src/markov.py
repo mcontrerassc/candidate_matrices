@@ -40,6 +40,15 @@ def naive_proposal(partition):
     new_partition[random_partition].append(random_candidate)
     return new_partition
 
+def fast_proposal_generator(partition8):
+    k = max(partition8)
+    ncand = len(partition8)
+    def fast_proposal(partition):
+        new_partition = partition.copy()
+        new_partition[np.random.randint(0, ncand-1)] = np.random.randint(0, k)
+        return new_partition
+    return fast_proposal
+
 def tilted_run(profile: PreferenceProfile, partition, score_fn, proposal = naive_proposal,iterations=1000, beta=np.log(2)/10000, maximize = False):
     cur_score = score_fn(profile, partition)
     best_score = float(cur_score)
