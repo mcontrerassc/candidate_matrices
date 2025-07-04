@@ -60,18 +60,38 @@ def tilted_run(profile: PreferenceProfile, partition, score_fn, proposal = naive
     for _ in range(iterations): #hill-climb interpretation.
         new_partition = proposal(cur_partition)
         new_score = score_fn(profile, new_partition)
-        cutoff = np.exp(beta*(cur_score - new_score))
+        cutoff = np.exp(my_beta*(cur_score - new_score))
         if np.random.random() < cutoff:
             cur_partition = new_partition
             cur_score = new_score
             if cur_score < best_score:
                 best_score = float(cur_score)
                 best_partition = [part.copy() for part in cur_partition]
-                #print("New best!")
     if best_score == float(score_fn(profile, partition)):
         print("Chain did not find a better partition. Consider increasing iterations!")
-        return cur_partition
-    
+    return best_partition
+
+def fast_tilted_run(starting_partition, score_fn, proposal_gen = fast_proposal_generator, iterations=1000, beta=np.log(2)/10000, maximize = False): #starting_partition is a numpy int8 array
+    proposal = proposal_gen(starting_partition)
+    cur_score = score_fn(starting_partition)
+    best_score = float(cur_score)
+    cur_partition = starting_partition.copy()
+    best_partition = starting_partition.copy()
+    my_beta = beta  # This is the "tilt" parameter; lower values make it more likely to accept worse proposals.
+    if maximize:
+        beta*= -1
+    for _ in range(iterations): #hill-climb interpretation.
+        new_partition = proposal(cur_partition)
+        new_score = score_fn(new_partition)
+        cutoff = np.exp(my_beta*(cur_score - new_score))
+        if np.random.random() < cutoff:
+            cur_partition = new_partition.copy()
+            cur_score = float(new_score)
+            if cur_score < best_score:
+                best_score = float(cur_score)
+                best_partition = cur_partition.copy()
+    if best_score == float(score_fn(starting_partition)):
+        print("Chain did not find a better partition. Consider increasing iterations!")
     return best_partition
 
 def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num_bursts):
@@ -87,20 +107,20 @@ def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num
                 status_quo = int(quo)
     return burst_best
 
-def forward_convert(partition, cand_dict):
-    """Convert a partition (list of lists) into a numpy int32 array."""
-    array = np.zeros(sum(len(block) for block in partition), dtype=np.int32)
+def forward_convert(partition, canonical_candidates):
+    """Convert a partition (list of lists) into a numpy int8 array."""
+    cand_dict = {candidate: i for i, candidate in enumerate(canonical_candidates)}
+    array = np.zeros(sum(len(block) for block in partition), dtype=np.int8)
     for i, bloc in enumerate(partition):
         for candidate in bloc:
             array[cand_dict[candidate]] = i
     return array
 
-def backward_convert(array, cand_dict):
-    """Convert a numpy int32 array back into a partition (list of lists)."""
-    inv_cand_dict = {v: k for k, v in cand_dict.items()}
+def backward_convert(array, canonical_candidates):
+    """Convert a numpy int8 array back into a partition (list of lists)."""
+    cand_dict = {i: candidate for i, candidate in enumerate(canonical_candidates)}
     partition = []
     for i in range(max(array) + 1):
-        bloc = [inv_cand_dict[j] for j in range(len(array)) if array[j] == i]
-        if bloc:
-            partition.append(bloc)
+        bloc = [cand_dict[j] for j in range(len(array)) if array[j] == i]
+        partition.append(bloc)
     return partition
