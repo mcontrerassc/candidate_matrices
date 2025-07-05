@@ -173,6 +173,29 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         ]
     return sum
 
+def make_not_bad(matrix): #this matrix better be in canonical order or so help me god
+    def fast_score(partition8):
+        summ = 0
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s != t:
+                    summ += matrix[i, j+i+1] + matrix[j+i+1, i]
+        return summ
+    return fast_score
+
+def make_good(matrix, example_partition8): #canonical order or riot
+    #if we just summed the diagonal entries of the matrix, this would usually give us a score we want to maximize
+    #to make it a score we want to minimize, keep the sum over each slate separate, and take their reciprocals -- so now we want to maximize the score of each slate separately
+    #this also makes it so the resulting score dislikes empty slates
+    def fast_score(partition8):
+        slate_sums = np.zeros(max(example_partition8)+1)+.01
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s == t:
+                    slate_sums[s] += matrix[i, j+i+1] + matrix[j+i+1, i]
+        return sum(1/s for s in slate_sums)
+    return fast_score
+
 def first_second_score(profile: PreferenceProfile, partitions):
     score = np.trace(blockiness_mtx(profile, partitions))
     return score
