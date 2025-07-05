@@ -2,7 +2,15 @@ import numpy as np
 from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
+<<<<<<< HEAD
 from src.tools import profile_ballots_to_list
+=======
+from src.markov import forward_convert, backward_convert
+
+def bal_to_tuple(ballot, cand_ref): #blame Chris
+    sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
+    return tuple(cand_ref[c] for c in sane_tuple), ballot.weight
+>>>>>>> main
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
 # where a candidate from block j was ranked 1st and a candidate from block i was ranked 2nd
@@ -48,23 +56,40 @@ def blockiness_mtx(profile: PreferenceProfile, partition):
 
     return normed_blockiness
 
-def gen_share_mentions(profile: PreferenceProfile):
+def gen_share_mentions(profile: PreferenceProfile, key_type = "string"):
     num_mentions = mentions(profile)
     total_mentions = sum(num_mentions.values())
-    share_mentions = {key : value/total_mentions for key,value in num_mentions.items()}
+    candidates = profile.candidates #canonical
+    if key_type == "string":
+        share_mentions = {key : value/total_mentions for key,value in num_mentions.items()}
+    elif key_type == "index":
+        share_mentions = {candidates.index(key) : value/total_mentions for key, value in num_mentions.items()}
     return share_mentions
 
 def relative_size_score(profile: PreferenceProfile, partitions):
+    if type(partitions) == np.ndarray:
+        partition = backward_convert(partitions, profile.candidates)
+    else:
+        partition = partitions.copy()
     share_mentions = gen_share_mentions(profile)
     sizes = []
-    for part in partitions:
+    for part in partition:
         sizes.append(
             sum([share_mentions[candidate] for candidate in part])
         )
     score = 1
     for size in sizes:
-        score *= (size+.1) # add a small constant to avoid division by zero
+        score *= (size+.01) # add a small constant to avoid division by zero
     return 1/score
+
+def relative_size_score_generator(profile: PreferenceProfile, k):
+    menshons = gen_share_mentions(profile, key_type = "index")
+    def fast_relative_size_score(partition: np.ndarray):
+        sizes = np.zeros(k) + 0.01
+        for i, t in enumerate(partition):
+            sizes[t] += menshons[i]
+        return 1/np.prod(sizes)
+    return fast_relative_size_score
 
 def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
     adjacencies = np.zeros((len(candidate_to_index), len(candidate_to_index)))
@@ -86,16 +111,62 @@ def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
                         candidate_to_index[ranking[i+1]] #this seems like an error, should be i+1
                         ] += ballot.weight
             
-    adjacencies = adjacencies + adjacencies.T
+    #normalize the adjacency matrix so the whole matrix sums to 1
+    total_weight = np.sum(adjacencies)
+    if total_weight > 0:
+        adjacencies /= total_weight
     return adjacencies
 
+def fast_adj(profile: PreferenceProfile):
+    candidate_to_index = {candidate: i for i, candidate in enumerate(profile.candidates)} #this is the canonical ordering of candidates
+    adjacencies = np.zeros((len(profile.candidates), len(profile.candidates)))
+    for bal in profile.ballots:
+        good_bal, w = bal_to_tuple(bal, candidate_to_index)
+        if len(good_bal)>1:
+            for i in range(len(good_bal) - 1):
+                adjacencies[good_bal[i], good_bal[i+1]] += w
+    #normalize the adjacency matrix so the whole matrix sums to 1
+    total_weight = np.sum(adjacencies)
+    if total_weight > 0:
+        adjacencies /= total_weight
+    return adjacencies
+
+def proportional_successive_matrix(profile: PreferenceProfile):
+    candidate_to_index = {candidate: i for i, candidate in enumerate(profile.candidates)} #this is the canonical ordering of candidates
+    adjacencies = np.zeros((len(profile.candidates), len(profile.candidates)))
+    for bal in profile.ballots:
+        good_bal, w = bal_to_tuple(bal, candidate_to_index)
+        if len(good_bal)>1:
+            for i in range(len(good_bal) - 1):
+                adjacencies[good_bal[i], good_bal[i+1]] += w
+    menshons = mentions(profile)
+    for cand, i in candidate_to_index.items():
+        if menshons[cand] > 0:
+            adjacencies[i, :] /= menshons[cand]
+    return adjacencies
+
+def cut_score_generator(profile: PreferenceProfile):
+    adjacencies = fast_adj(profile)
+    def fast_cut_score(partition8):
+        sum = 0
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s != t:
+                    sum += adjacencies[i, j+i+1] + adjacencies[j+i+1, i]
+        return sum
+    return fast_cut_score
+
 def cut_score(profile: PreferenceProfile, partitions): #data structure is a list of lists of candidates
+    if type(partitions) == np.ndarray:
+        partition = backward_convert(partitions, profile.candidates)
+    else:
+        partition = partitions
     sum = 0
     cands = profile.candidates
     candidate_to_index = {candidate : i for i, candidate in enumerate(cands)}
     adjacencies = make_adjacency_matrix(profile, candidate_to_index)
-    for part1 in partitions:
-        for part2 in partitions:
+    for part1 in partition:
+        for part2 in partition:
             if part1 == part2:
                 continue
             for c1 in part1:
@@ -105,6 +176,29 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         candidate_to_index[c2]
                         ]
     return sum
+
+def make_not_bad(matrix): #this matrix better be in canonical order or so help me god
+    def fast_score(partition8):
+        summ = 0
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s != t:
+                    summ += matrix[i, j+i+1] + matrix[j+i+1, i]
+        return summ
+    return fast_score
+
+def make_good(matrix, example_partition8): #canonical order or riot
+    #if we just summed the diagonal entries of the matrix, this would usually give us a score we want to maximize
+    #to make it a score we want to minimize, keep the sum over each slate separate, and take their reciprocals -- so now we want to maximize the score of each slate separately
+    #this also makes it so the resulting score dislikes empty slates
+    def fast_score(partition8):
+        slate_sums = np.zeros(max(example_partition8)+1)+.01
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s == t:
+                    slate_sums[s] += matrix[i, j+i+1] + matrix[j+i+1, i]
+        return sum(1/s for s in slate_sums)
+    return fast_score
 
 def first_second_score(profile: PreferenceProfile, partitions):
     score = np.trace(blockiness_mtx(profile, partitions))
@@ -178,6 +272,7 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
 
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
+<<<<<<< HEAD
 
     num_ballot_scores = len(ballots_to_distance_first_slate)
     if num_ballot_scores != len(ballots_to_distance_second_slate):
@@ -190,3 +285,6 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     # ballot?
     return sum([min(ballots_to_distance_first_slate[i], ballots_to_distance_second_slate[i]) for i in range(num_ballot_scores)])
     
+=======
+    return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
+>>>>>>> main
