@@ -44,7 +44,7 @@ def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None):
 
     plt.show()
 
-def viz_partition(partition, boost, candidates):
+def viz_partition(partition, boost, candidates, cmap='PRGn'):
     if type(partition) == np.ndarray:
         partish = backward_convert(partition, candidates)
     else:
@@ -66,7 +66,7 @@ def viz_partition(partition, boost, candidates):
     show_matrix(
         permutation_matrix.T @ boost @ permutation_matrix,
         labels=ordering,
-        cmap='PRGn',
+        cmap=cmap,
         boundaries=boundaries
     )
 
