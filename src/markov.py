@@ -107,6 +107,27 @@ def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num
                 status_quo = int(quo)
     return burst_best
 
+def calibrate_scores(score_list, starting_partition: np.ndarray, iterations=1000, print_weights = False):
+    scores = [[] for score in score_list] 
+    new_partition = starting_partition.copy()
+    proposal = fast_proposal_generator(new_partition)
+    ideal = 100 / len(score_list)  # ideal median score for each function if they are to be equally weighted
+    for _ in range(iterations):
+        new_partition = proposal(new_partition)
+        for i, score_fn in enumerate(score_list):
+            scores[i].append(score_fn(new_partition))
+    medians = [np.median(s) for s in scores]
+    if 0 in medians:
+        raise ValueError("One of the score functions returned a median of zero. This may indicate that the score function is not appropriate for the given partition.")
+    weights = [ideal / median for median in medians]
+    def ideal_score_fn(partition):
+        return sum(w * score_fn(partition) for w, score_fn in zip(weights, score_list))
+    if print_weights:
+        print("Weights for score functions (to achieve equal median scores):")
+        for i, weight in enumerate(weights):
+            print(f"Score function {i}: {weight}")
+    return ideal_score_fn
+
 def forward_convert(partition, canonical_candidates):
     """Convert a partition (list of lists) into a numpy int8 array."""
     cand_dict = {candidate: i for i, candidate in enumerate(canonical_candidates)}
