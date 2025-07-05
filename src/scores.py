@@ -2,15 +2,12 @@ import numpy as np
 from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
-<<<<<<< HEAD
 from src.tools import profile_ballots_to_list
-=======
 from src.markov import forward_convert, backward_convert
 
 def bal_to_tuple(ballot, cand_ref): #blame Chris
     sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
     return tuple(cand_ref[c] for c in sane_tuple), ballot.weight
->>>>>>> main
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
 # where a candidate from block j was ranked 1st and a candidate from block i was ranked 2nd
@@ -272,7 +269,6 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
 
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
-<<<<<<< HEAD
 
     num_ballot_scores = len(ballots_to_distance_first_slate)
     if num_ballot_scores != len(ballots_to_distance_second_slate):
@@ -285,6 +281,3 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     # ballot?
     return sum([min(ballots_to_distance_first_slate[i], ballots_to_distance_second_slate[i]) for i in range(num_ballot_scores)])
     
-=======
-    return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
->>>>>>> main
