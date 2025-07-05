@@ -2,6 +2,7 @@ import numpy as np
 from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
+from src.markov import forward_convert, backward_convert
 
 def bal_to_tuple(ballot, cand_ref): #blame Chris
     sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
@@ -58,15 +59,19 @@ def gen_share_mentions(profile: PreferenceProfile):
     return share_mentions
 
 def relative_size_score(profile: PreferenceProfile, partitions):
+    if type(partitions) == np.ndarray:
+        partition = backward_convert(partitions, profile.candidates)
+    else:
+        partition = partitions.copy()
     share_mentions = gen_share_mentions(profile)
     sizes = []
-    for part in partitions:
+    for part in partition:
         sizes.append(
             sum([share_mentions[candidate] for candidate in part])
         )
     score = 1
     for size in sizes:
-        score *= (size+.1) # add a small constant to avoid division by zero
+        score *= (size+.01) # add a small constant to avoid division by zero
     return 1/score
 
 def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
@@ -135,12 +140,16 @@ def cut_score_generator(profile: PreferenceProfile):
     return fast_cut_score
 
 def cut_score(profile: PreferenceProfile, partitions): #data structure is a list of lists of candidates
+    if type(partitions) == np.ndarray:
+        partition = backward_convert(partitions, profile.candidates)
+    else:
+        partition = partitions
     sum = 0
     cands = profile.candidates
     candidate_to_index = {candidate : i for i, candidate in enumerate(cands)}
     adjacencies = make_adjacency_matrix(profile, candidate_to_index)
-    for part1 in partitions:
-        for part2 in partitions:
+    for part1 in partition:
+        for part2 in partition:
             if part1 == part2:
                 continue
             for c1 in part1:
