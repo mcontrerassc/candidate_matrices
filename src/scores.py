@@ -52,10 +52,14 @@ def blockiness_mtx(profile: PreferenceProfile, partition):
 
     return normed_blockiness
 
-def gen_share_mentions(profile: PreferenceProfile):
+def gen_share_mentions(profile: PreferenceProfile, key_type = "string"):
     num_mentions = mentions(profile)
     total_mentions = sum(num_mentions.values())
-    share_mentions = {key : value/total_mentions for key,value in num_mentions.items()}
+    candidates = profile.candidates #canonical
+    if key_type == "string":
+        share_mentions = {key : value/total_mentions for key,value in num_mentions.items()}
+    elif key_type == "index":
+        share_mentions = {candidates.index(key) : value/total_mentions for key, value in num_mentions.items()}
     return share_mentions
 
 def relative_size_score(profile: PreferenceProfile, partitions):
@@ -73,6 +77,15 @@ def relative_size_score(profile: PreferenceProfile, partitions):
     for size in sizes:
         score *= (size+.01) # add a small constant to avoid division by zero
     return 1/score
+
+def relative_size_score_generator(profile: PreferenceProfile, k):
+    menshons = gen_share_mentions(profile, key_type = "index")
+    def fast_relative_size_score(partition: np.ndarray):
+        sizes = np.zeros(k) + 0.01
+        for i, t in enumerate(partition):
+            sizes[t] += menshons[i]
+        return 1/np.prod(sizes)
+    return fast_relative_size_score
 
 def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
     adjacencies = np.zeros((len(candidate_to_index), len(candidate_to_index)))
