@@ -102,6 +102,20 @@ def fast_adj(profile: PreferenceProfile):
                 adjacencies[good_bal[i], good_bal[i+1]] += w
     return adjacencies
 
+def proportional_successive_matrix(profile: PreferenceProfile):
+    candidate_to_index = {candidate: i for i, candidate in enumerate(profile.candidates)} #this is the canonical ordering of candidates
+    adjacencies = np.zeros((len(profile.candidates), len(profile.candidates)))
+    for bal in profile.ballots:
+        good_bal, w = bal_to_tuple(bal, candidate_to_index)
+        if len(good_bal)>1:
+            for i in range(len(good_bal) - 1):
+                adjacencies[good_bal[i], good_bal[i+1]] += w
+    menshons = mentions(profile)
+    for cand, i in candidate_to_index.items():
+        if menshons[cand] > 0:
+            adjacencies[i, :] /= menshons[cand]
+    return adjacencies
+
 def cut_score_generator(profile: PreferenceProfile):
     adjacencies = fast_adj(profile)
     def fast_cut_score(partition8):
