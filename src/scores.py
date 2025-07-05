@@ -89,7 +89,10 @@ def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
                         candidate_to_index[ranking[i+1]] #this seems like an error, should be i+1
                         ] += ballot.weight
             
-    #adjacencies = adjacencies + adjacencies.T
+    #normalize the adjacency matrix so the whole matrix sums to 1
+    total_weight = np.sum(adjacencies)
+    if total_weight > 0:
+        adjacencies /= total_weight
     return adjacencies
 
 def fast_adj(profile: PreferenceProfile):
@@ -100,6 +103,10 @@ def fast_adj(profile: PreferenceProfile):
         if len(good_bal)>1:
             for i in range(len(good_bal) - 1):
                 adjacencies[good_bal[i], good_bal[i+1]] += w
+    #normalize the adjacency matrix so the whole matrix sums to 1
+    total_weight = np.sum(adjacencies)
+    if total_weight > 0:
+        adjacencies /= total_weight
     return adjacencies
 
 def proportional_successive_matrix(profile: PreferenceProfile):
