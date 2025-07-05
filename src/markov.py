@@ -71,7 +71,7 @@ def tilted_run(profile: PreferenceProfile, partition, score_fn, proposal = naive
         print("Chain did not find a better partition. Consider increasing iterations!")
     return best_partition
 
-def fast_tilted_run(starting_partition, score_fn, proposal_gen = fast_proposal_generator, iterations=1000, beta=np.log(20), maximize = False): #starting_partition is a numpy int8 array
+def fast_tilted_run(starting_partition, score_fn, proposal_gen = fast_proposal_generator, iterations=1000, beta=np.log(2)/10, maximize = False): #starting_partition is a numpy int8 array
     proposal = proposal_gen(starting_partition)
     cur_score = score_fn(starting_partition)
     best_score = float(cur_score)
