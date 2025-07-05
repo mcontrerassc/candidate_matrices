@@ -94,6 +94,20 @@ def fast_tilted_run(starting_partition, score_fn, proposal_gen = fast_proposal_g
         print("Chain did not find a better partition. Consider increasing iterations!")
     return best_partition
 
+def fast_short_burst(starting_partition, score_fn, proposal_gen = fast_proposal_generator, burst_size=40, num_bursts=50):
+    status_quo = score_fn(starting_partition)
+    burst_best = starting_partition.copy()
+    proposal = proposal_gen(burst_best)
+    for _ in tqdm.tqdm(range(num_bursts)):
+        trial_step = burst_best
+        for _ in range(burst_size):
+            trial_step = proposal(trial_step)
+            quo = score_fn(trial_step)
+            if quo <= status_quo:
+                burst_best = trial_step.copy()
+                status_quo = float(quo)
+    return burst_best
+
 def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num_bursts):
     status_quo = score_fn(profile, partition)
     burst_best = partition.copy()
