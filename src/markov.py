@@ -96,6 +96,85 @@ def fast_tilted_run(starting_partition, score_fn, proposal_gen = fast_proposal_g
         print("Chain did not find a better partition. Consider increasing iterations!")
     return best_partition
 
+def fast_tilted_run3(
+    starting_partition,
+    score_fn,
+    proposal_gen=fast_proposal_generator,
+    iterations=1000,
+    beta=np.log(2)/5,
+    maximize=False,
+    path_to_export="./outputs",
+    num_best=5
+):
+    # get a string name for the score_fn
+    scorefn_name = getattr(score_fn, "score_name", None)
+    if scorefn_name is None:
+        scorefn_name = getattr(score_fn, "__name__", str(score_fn))
+ 
+    # all partitions file
+    output_file = os.path.join(path_to_export, f"{scorefn_name}.jsonl")
+    
+    # best partitions file
+    best_dir = os.path.join(path_to_export, "best")
+    os.makedirs(best_dir, exist_ok=True)
+    best_file = os.path.join(best_dir, f"{scorefn_name}.jsonl")
+
+    os.makedirs(path_to_export, exist_ok=True)
+
+    # initialize current
+    proposal = proposal_gen(starting_partition)
+    cur_partition = starting_partition.copy()
+    cur_score = score_fn(cur_partition)
+
+    my_beta = beta
+    if maximize:
+        beta *= -1
+
+    # initialize best list
+    best_partitions = [cur_partition.copy()]
+    best_scores = [float(cur_score)]
+
+    with open(output_file, "w") as f_all:
+        for _ in range(iterations):
+            # record current partition
+            f_all.write(json.dumps(cur_partition.tolist()) + "\n")
+
+            # propose
+            new_partition = proposal(cur_partition)
+            new_score = score_fn(new_partition)
+
+            # acceptance
+            cutoff = np.exp(my_beta * (cur_score - new_score))
+            if np.random.random() < cutoff:
+                cur_partition = new_partition.copy()
+                cur_score = float(new_score)
+
+                # check if we should update best list
+                if len(best_partitions) < num_best:
+                    best_partitions.append(cur_partition.copy())
+                    best_scores.append(cur_score)
+                else:
+                    worst_idx = np.argmax(best_scores)
+                    is_duplicate = any(np.array_equal(cur_partition, bp) for bp in best_partitions)
+                    if cur_score < best_scores[worst_idx] and not is_duplicate != 0:
+                        best_partitions[worst_idx] = cur_partition.copy()
+                        best_scores[worst_idx] = cur_score
+
+        # record final partition as well
+        f_all.write(json.dumps(cur_partition.tolist()) + "\n")
+
+    # save best partitions
+    with open(best_file, "w") as f_best:
+        for part in best_partitions:
+            f_best.write(json.dumps(part.tolist()) + "\n")
+
+    if min(best_scores) == float(score_fn(starting_partition)):
+        print("Chain did not find a better partition. Consider increasing iterations!")
+
+    # return the overall best partition
+    best_idx = np.argmin(best_scores)
+    return best_partitions[best_idx]
+
 def fast_tilted_run2(
     starting_partition,
     score_fn,
