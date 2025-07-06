@@ -142,7 +142,7 @@ def proportional_successive_matrix(profile: PreferenceProfile):
             adjacencies[i, :] /= menshons[cand]
     return adjacencies
 
-def cut_score_generator(profile: PreferenceProfile):
+def cut_score_generator(profile: PreferenceProfile, k=None):
     adjacencies = fast_adj(profile)
     def fast_cut_score(partition8):
         sum = 0
