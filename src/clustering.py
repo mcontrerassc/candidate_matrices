@@ -9,6 +9,8 @@ from cdlib import algorithms
 import networkx as nx
 from src.tools import enumerate_bipartitions
 from src.scores import distance_to_slate_across_profile
+from tqdm import tqdm
+import jsonlines as jl
 
 
 def create_graph_louvain_bm(boost: np.ndarray):
@@ -55,7 +57,22 @@ def find_distance_to_slate_optimal_bipartition(profile: PreferenceProfile):
     '''
 
     all_bipartitions = enumerate_bipartitions(profile.candidates)
-    distance_to_slate_scores = [distance_to_slate_across_profile(profile, bipart) for bipart in all_bipartitions]
+    #distance_to_slate_scores =
+    #[distance_to_slate_across_profile(profile, bipart) for bipart in
+    #all_bipartitions]
+    
+
+    distance_to_slate_scores = []
+
+    with jl.open("bipart_results_as_gen_2.jsonl", "w") as writer:
+        for bipart in tqdm(all_bipartitions):
+
+            dts_score = distance_to_slate_across_profile(profile, bipart) 
+            distance_to_slate_scores.append(dts_score)
+            writer.write({
+                "bipart": [list(part) for part in bipart],
+                "distance_to_slate": dts_score
+            })
 
     parts_and_score = list(zip(all_bipartitions, distance_to_slate_scores)) 
     return sorted(parts_and_score, key=lambda entry: entry[1])
