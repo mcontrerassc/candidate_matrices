@@ -117,7 +117,7 @@ def fast_tilted_run3(
     # best partitions file
     best_dir = os.path.join(path_to_export, "best")
     os.makedirs(best_dir, exist_ok=True)
-    best_file = os.path.join(best_dir, f"{scorefn_name}.jsonl")
+    best_file = os.path.join(best_dir, f"{scorefn_name}_tilted.jsonl")
 
     os.makedirs(path_to_export, exist_ok=True)
 
@@ -163,67 +163,16 @@ def fast_tilted_run3(
         # record final partition as well
         f_all.write(json.dumps(cur_partition.tolist()) + "\n")
 
-    # save best partitions
+    # sort best_partitions by their associated scores
+    sorted_pairs = sorted(zip(best_scores, best_partitions), key=lambda x: x[0])
+    sorted_best_scores, sorted_best_partitions = zip(*sorted_pairs)
     with open(best_file, "w") as f_best:
-        for part in best_partitions:
+        for part in sorted_best_partitions:
             f_best.write(json.dumps(part.tolist()) + "\n")
 
     if min(best_scores) == float(score_fn(starting_partition)):
         print("Chain did not find a better partition. Consider increasing iterations!")
-
-    # return the overall best partition
-    best_idx = np.argmin(best_scores)
-    return best_partitions[best_idx]
-
-def fast_tilted_run2(
-    starting_partition,
-    score_fn,
-    proposal_gen=fast_proposal_generator,
-    iterations=1000,
-    beta=np.log(2)/5,
-    maximize=False,
-    path_to_export="./outputs"
-):
-    # get a string name for the score_fn
-    scorefn_name = getattr(score_fn, "score_name", None)
-    if scorefn_name is None:
-        scorefn_name = getattr(score_fn, "__name__", str(score_fn))
- 
-    output_file = os.path.join(path_to_export, f"{scorefn_name}.jsonl")
-    
-    os.makedirs(path_to_export, exist_ok=True)
-    
-    # open the jsonl file for writing
-    with open(output_file, "w") as f:
-        proposal = proposal_gen(starting_partition)
-        cur_score = score_fn(starting_partition)
-        best_score = float(cur_score)
-        cur_partition = starting_partition.copy()
-        best_partition = starting_partition.copy()
-        my_beta = beta
-        if maximize:
-            beta *= -1
-
-        for _ in range(iterations):
-            # record current partition
-            f.write(json.dumps(cur_partition.tolist()) + "\n")
-            
-            new_partition = proposal(cur_partition)
-            new_score = score_fn(new_partition)
-            cutoff = np.exp(my_beta * (cur_score - new_score))
-            if np.random.random() < cutoff:
-                cur_partition = new_partition.copy()
-                cur_score = float(new_score)
-                if cur_score < best_score:
-                    best_score = float(cur_score)
-                    best_partition = cur_partition.copy()
-        
-        # record final partition as well
-        f.write(json.dumps(cur_partition.tolist()) + "\n")
-    
-    if best_score == float(score_fn(starting_partition)):
-        print("Chain did not find a better partition. Consider increasing iterations!")
-    return best_partition
+    return sorted_best_partitions[0]
 
 def fast_short_burst(starting_partition, score_fn, proposal_gen = fast_proposal_generator, burst_size=40, num_bursts=50):
     status_quo = score_fn(starting_partition)
@@ -238,6 +187,61 @@ def fast_short_burst(starting_partition, score_fn, proposal_gen = fast_proposal_
                 burst_best = trial_step.copy()
                 status_quo = float(quo)
     return burst_best
+
+def fast_short_burst2(
+    starting_partition,
+    score_fn,
+    proposal_gen=fast_proposal_generator,
+    burst_size=40,
+    num_bursts=50,
+    num_best=5
+):
+    status_quo = score_fn(starting_partition)
+    burst_best = starting_partition.copy()
+    proposal = proposal_gen(burst_best)
+
+    # initialize best partitions list
+    best_partitions = [burst_best.copy()]
+    best_scores = [float(status_quo)]
+
+    for _ in tqdm.tqdm(range(num_bursts)):
+        trial_step = burst_best.copy()
+        for _ in range(burst_size):
+            trial_step = proposal(trial_step)
+            quo = score_fn(trial_step)
+            if quo <= status_quo:
+                burst_best = trial_step.copy()
+                status_quo = float(quo)
+
+        # at the end of this burst, see if burst_best is worth adding
+        is_duplicate = any(np.array_equal(burst_best, bp) for bp in best_partitions)
+        if not is_duplicate:
+            if len(best_partitions) < num_best:
+                best_partitions.append(burst_best.copy())
+                best_scores.append(float(status_quo))
+            else:
+                worst_idx = np.argmax(best_scores)
+                if status_quo < best_scores[worst_idx]:
+                    best_partitions[worst_idx] = burst_best.copy()
+                    best_scores[worst_idx] = float(status_quo)
+
+    # sort best_partitions before returning
+    sorted_pairs = sorted(zip(best_scores, best_partitions), key=lambda x: x[0])
+    sorted_best_scores, sorted_best_partitions = zip(*sorted_pairs)
+
+    # you could also optionally export these
+    best_dir = "./outputs/best"
+    os.makedirs(best_dir, exist_ok=True)
+    scorefn_name = getattr(score_fn, "score_name", None)
+    if scorefn_name is None:
+        scorefn_name = getattr(score_fn, "__name__", str(score_fn))
+    best_file = os.path.join(best_dir, f"{scorefn_name}_burst.jsonl")
+
+    with open(best_file, "w") as f_best:
+        for part in sorted_best_partitions:
+            f_best.write(json.dumps(part.tolist()) + "\n")
+
+    return sorted_best_partitions[0]
 
 def short_burst(profile: PreferenceProfile, partition, score_fn, burst_size, num_bursts):
     status_quo = score_fn(profile, partition)
