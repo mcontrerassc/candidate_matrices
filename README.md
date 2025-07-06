@@ -9,7 +9,7 @@ To install the required packages listed in `requirements.txt`, run:
 
 ## Running a Schmillion Experiments
 
-This repository provides a parallel experiment runner to execute many variants of `thechef` routine with different scoring functions, runner types, and matrix configurations. The workflow is broken into two steps:
+This repository provides a parallel experiment runner to execute many variants of `thechef` routine with different scoring functions, runner types, and matrix types. The workflow is broken into two steps:
 
 ---
 
@@ -28,7 +28,7 @@ To regenerate the combinations, simply run:
 
 If you would like to change:
 - the input data file (currently `./data/Portland_D4.pkl`)
-- the number of clusters `k` (currently `k=3`)
+- the number of slates `k` (currently `k=3`)
 
 you can edit the `generate_kwargs.py` script directly:
 
