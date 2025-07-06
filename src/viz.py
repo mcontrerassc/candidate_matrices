@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from src.markov import forward_convert, backward_convert
+import json
 
 def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None):
     fig, ax = plt.subplots()
