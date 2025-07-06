@@ -5,8 +5,8 @@ score_types = ["cut", "rel", "good", "notbad"]
 matrix_types = ["ADJ", "PSM"]
 matrix_scores = ["good", "notbad"]
 
-datafile = "./data/Portland_D1.pkl"
-k = 2
+datafile = "./data/Portland_D4.pkl"
+k = 3
 
 with jsonlines.open("schmillion_params.jsonl", mode="w") as writer:
     for run in runner_types:
