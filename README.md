@@ -7,9 +7,9 @@ To install the required packages listed in `requirements.txt`, run:
 
     pip install -r requirements.txt
 
-## Running Schmillion Experiments
+## Running a Schmillion Experiments
 
-This repository provides a parallel experiment runner to execute many variants of the `thechef` routine with different scoring functions, runner types, and matrix configurations. The workflow is broken into two steps:
+This repository provides a parallel experiment runner to execute many variants of `thechef` routine with different scoring functions, runner types, and matrix configurations. The workflow is broken into two steps:
 
 ---
 
@@ -37,6 +37,8 @@ you can edit the `generate_kwargs.py` script directly:
 
 and rerun it.
 
+The length of each chain is currently fixed to get a million steps in total; to change this, edit the `schmillion_cli.py` script. 
+
 ---
 
 ### 2. Execute all runs in parallel
@@ -47,7 +49,7 @@ To launch the whole sweep, run:
 
     bash a_schmillion_run.sh
 
-Each individual run will log its output to a `logs/` directory, and its result JSONL will be stored in `outputs/best/`. The chef also stores the best partition from every run in a dictionary `outputs/best/chef_results.jsonl.`
+Each individual run will log its output to a `logs/` directory, and its result JSONL will be stored in `outputs/best/`. The chef also stores the best partition from each run in a dictionary, which it stores as a line of `outputs/best/chef_results.jsonl.`
 
 There are viz functions to visualize all of these output formats in `src/viz.py`
 
@@ -56,7 +58,7 @@ There are viz functions to visualize all of these output formats in `src/viz.py`
 
 ## Notes
 
-- If you add new scoring functions or matrix types, be sure to update the lists inside `generate_kwargs.py`, as well as import them into `schmillion_cli.py`. 
+- If you add new scoring functions or matrix types (e.g. modularity, optimized distance to slate), be sure to update the lists inside `generate_kwargs.py`, as well as import them into `schmillion_cli.py`. 
 - You can adjust the concurrency limit in `a_schmillion_run.sh` by changing this line:
 
       while [ "$(jobs -rp | wc -l)" -ge 10 ]; do
