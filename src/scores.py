@@ -175,7 +175,7 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         ]
     return sum
 
-def make_not_bad(matrix, matrix_name = "matrix"): #this matrix better be in canonical order or so help me god
+def make_not_bad(matrix, example_partition8= None, matrix_name = "matrix"): #this matrix better be in canonical order or so help me god
     def fast_score(partition8):
         summ = 0
         for i, s in enumerate(partition8[:-1]):
