@@ -5,7 +5,7 @@ from votekit.utils import mentions
 from votekit.matrices import matrix_heatmap, boost_matrix
 import matplotlib.pyplot as plt
 import numpy as np
-from cdlib import algorithms
+from cdlib import algorithms, evaluation
 import networkx as nx
 
 
@@ -26,6 +26,7 @@ def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolu
     mentions_dict = mentions(profile)
     all_cands_sorted_by_mentions = sorted(profile.candidates, reverse=True, key = lambda x: mentions_dict[x])
     partition = algorithms.louvain(G, weight='weight', resolution = resolution, randomize = randomize)
+    modularity_score = evaluation.newman_girvan_modularity(G, partition, weight='weight').score
     clusters = {}
     for node, clust_ids in partition.to_node_community_map().items():
         clust_id = clust_ids[0] 
@@ -40,4 +41,4 @@ def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolu
         for node in cluster_list:
             list_cands.append(all_cands_sorted_by_mentions[node])
         partition.append(list_cands)
-    return partition
+    return partition, modularity_score
