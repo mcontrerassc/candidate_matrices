@@ -1,0 +1,244 @@
+import click
+import json
+import jsonlines as jl
+import random
+import pickle
+from votekit import PreferenceProfile
+import warnings
+from src.markov import forward_convert, backward_convert, random_partition, calibrate_scores, fast_tilted_run3, fast_short_burst2
+from src.scores import fast_adj, proportional_successive_matrix, cut_score_generator, relative_size_score_generator, make_good, make_not_bad
+#from src.cleaning
+
+#warnings.filterwarnings("ignore")
+
+matrix_types = {
+    "ADJ": fast_adj,
+    "PSM": proportional_successive_matrix,
+}
+
+score_types = {
+    "cut": cut_score_generator,
+    "rel": relative_size_score_generator,
+    "good": make_good,
+    "notbad": make_not_bad,
+}
+
+runner_types = {
+    "tilted": fast_tilted_run3,
+    "short_burst": fast_short_burst2, #not implemented yet
+}
+
+matrix_scores = ["good", "notbad"] #modularity should be added here too eventually
+
+def thechef( #let him cook
+        path_to_data:str,
+        run_type:str,
+        score1:str,
+        score2:str,
+        matrix1:str = None,
+        matrix2:str = None,
+        k: int = 3,
+        output_file: click.Path = "./outputs/best/chef_results.jsonl"
+):
+    with open(path_to_data, 'rb') as file:
+        loaded = pickle.load(file)
+    profile = loaded['profile']
+    boost = loaded['boost'] #probs don't need this
+    starting_partition = forward_convert(random_partition(list(profile.candidates), k), profile.candidates)
+    if score1 in matrix_scores:
+        if matrix1 is None: 
+            warnings.warn(f"Matrix type not specified for score {score1}. Defaulting to 'ADJ'.")
+            matrix1 = "ADJ"
+        M1 = matrix_types[matrix1](profile)
+        score_fn1 = score_types[score1](M1, example_partition8=starting_partition, matrix_name=matrix1)
+    else:
+        score_fn1 = score_types[score1](profile, k=k)
+    if score2 in matrix_scores:
+        if matrix2 is None: 
+            warnings.warn(f"Matrix type not specified for score {score2}. Defaulting to 'ADJ'.")
+            matrix2 = "ADJ"
+        M2 = matrix_types[matrix2](profile)
+        score_fn2 = score_types[score2](M2, example_partition8=starting_partition, matrix_name=matrix2)
+    else:
+        score_fn2 = score_types[score2](profile, k=k)
+
+    combined_score = calibrate_scores([score_fn1, score_fn2], starting_partition)
+    if run_type == "tilted":
+        best = fast_tilted_run3(
+            starting_partition,
+            combined_score,
+            iterations=1000000,  #how much is a schmillion?
+        )
+    elif run_type == "short_burst":
+        best = fast_short_burst2(
+            starting_partition,
+            combined_score,
+            burst_size=50,
+            num_bursts=20000  # 50*20,000 = 1 (sch)million
+        )
+    else:
+        raise ValueError(f"Unknown run type: {run_type}. Must be one of {list(runner_types.keys())}.")
+    #save best as the last line of a jsonl, and also record combined_score.score_name
+    with jl.open(output_file, "w") as writer:
+        writer.write({
+            "partition": backward_convert(best, profile.candidates),
+            "score1": score_fn1.score_name,
+            "score2": score_fn2.score_name,
+            "combined_score": combined_score.score_name,
+            "matrix1": matrix1,
+            "matrix2": matrix2,
+        })
+#
+#def run_election(
+#    ballot_generator: str,
+#    num_voters: int,
+#    num_seats: int,
+#    ballot_generator_kwargs: dict,
+#    election_type: str,
+#    num_iterations: int,
+#    output_file: click.Path#,
+#):
+#    with jl.open(output_file, "w") as writer:
+#        for _ in range(num_iterations):
+#            profile = (
+#                BG_TYPES[ballot_generator]
+#                .from_params(**ballot_generator_kwargs)
+#                .generate_profile(num_voters)
+#            )
+#            assert isinstance(profile, PreferenceProfile)
+
+#            election: elec.Election = ELECTION_TYPES[election_type](
+#                profile, m=num_seats, tiebreak="random"
+#            )
+#            winners = winners = [next(iter(s)) for s in election.get_elected() if s]
+#            writer.write({"winners": winners})
+
+#    print(f"Finished successfully! Results saved to {output_file}")
+
+
+# def run_election(
+#     ballot_generator: str,
+#     num_voters: int,
+#     num_seats: int,
+#     ballot_generator_kwargs: dict,
+#     election_type: str,
+#     num_iterations: int,
+#     output_file: click.Path,
+# ):
+#     with jl.open(output_file, "w") as writer:
+#         for _ in range(num_iterations):
+#             profile = (
+#                 BG_TYPES[ballot_generator]
+#                 .from_params(**ballot_generator_kwargs)
+#                 .generate_profile(num_voters)
+#             )
+#             assert isinstance(profile, PreferenceProfile)
+
+#             # Random bad constructor
+#             if random.random() < 0.01:
+#                 election: elec.Election = ELECTION_TYPES[election_type](profile, m=1000)
+#             election: elec.Election = ELECTION_TYPES[election_type](
+#                 profile, m=num_seats, tiebreak="random"
+#             )
+#             winners = winners = [next(iter(s)) for s in election.get_elected() if s]
+#             writer.write({"winners": winners})
+
+
+# ==============================================#
+# Now make a little CLI to wrap this function in
+# ==============================================
+
+
+@click.command()
+@click.option(
+    "--path-to-data",
+    type=click.Path(exists=True),
+    help="Path to the input data file (pickle format).",
+)
+@click.option(
+    "--run-type",
+    type=click.Choice(list(runner_types.keys()), case_sensitive=False),
+    default="tilted",
+    help="The type of run to perform (e.g., 'tilted' or 'short_burst').",
+)
+@click.option("--score1",
+    type=click.Choice(list(score_types.keys()), case_sensitive=False),
+    default="cut",
+    help="The first score type to use for the run.",
+)
+@click.option("--score2",
+    type=click.Choice(list(score_types.keys()), case_sensitive=False),
+    default="rel",
+    help="The second score type to use for the run.",
+)
+@click.option("--matrix1",
+    type=click.Choice(list(matrix_types.keys()), case_sensitive=False),
+    default=None,
+    help="The matrix type to use for the first score (if applicable).",
+)
+@click.option("--matrix2",
+    type=click.Choice(list(matrix_types.keys()), case_sensitive=False),
+    default=None,
+    help="The matrix type to use for the second score (if applicable).",
+)
+@click.option("--k",
+    type=int,
+    default=3,
+    help="The number of clusters to use for the partitioning (default is 3).",
+)
+@click.option("--output-file",
+    "-o",
+    type=click.Path(),
+    default = "./outputs/best/chef_results.jsonl",
+    help="Path to save the best partition results.",
+)
+
+def thechef_cli(
+    path_to_data: str,
+    run_type: str,
+    score1: str,
+    score2: str,
+    matrix1: str,
+    matrix2: str,
+    k: int,
+    output_file: click.Path,
+):
+    thechef(
+        path_to_data=path_to_data,
+        run_type=run_type,
+        score1=score1,
+        score2=score2,
+        matrix1=matrix1,
+        matrix2=matrix2,
+        k=k,
+        output_file=output_file,
+    )
+
+#def run_election_cli(
+#    ballot_generator: str,
+#    num_voters: int,
+#    num_seats: int,
+#    election_type: str,
+#    ballot_generator_kwargs_settings_file: str,
+#    num_iterations: int,
+#    output_file: click.Path,
+#):
+#    with open(ballot_generator_kwargs_settings_file, "r") as f:
+#        ballot_generator_kwargs = json.load(f)
+
+#    if ballot_generator_kwargs is None:
+#        ballot_generator_kwargs = {}
+
+#    run_election(
+#        ballot_generator=ballot_generator,
+#        num_voters=num_voters,
+#        num_seats=num_seats,
+#        ballot_generator_kwargs=ballot_generator_kwargs,
+#        election_type=election_type,
+#        num_iterations=num_iterations,
+#        output_file=output_file,
+#    )
+
+
+if __name__ == "__main__":
+    thechef_cli()
