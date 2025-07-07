@@ -4,6 +4,7 @@ from votekit.utils import mentions
 from itertools import accumulate
 from src.tools import profile_ballots_to_list
 from src.markov import forward_convert, backward_convert
+from sknetwork.clustering import get_modularity
 
 def bal_to_tuple(ballot, cand_ref): #blame Chris
     sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
@@ -208,6 +209,37 @@ def make_good(matrix, example_partition8, matrix_name = "matrix"): #canonical or
     name = f"{matrix_name}_good"
     fast_score.score_name = name
     return fast_score
+
+
+def get_modularity_score(matrix, example_partition8, candidate_order, resolution=1): #,matrix_name = "matrix"):
+    '''
+        takes in a matrix with a specified partition of the elements,
+        returns the modularity score
+        args:
+            matrix: list of list of np array, describing the weights
+                of the graph
+            example_partition8: List of lists where each inner list is
+                a part in the partition
+            candidate_order: an array whose entries correspond to the
+                values in flatten(example_partition). Describes the
+                canonical order of matrix with respect to matrix
+        returns:
+            modularity score of the given matrix wrt the given
+            partition, as np float
+    '''
+
+    # TODO: any checking if the input matrix has negative weights?
+    # any verification that example_partition is actually a partition?
+
+    # for each candidate find the index of the first part in which
+    # they appear. This is unique if example_partition is actually a
+    # partition
+    labels = np.array([example_partition8.index(next(
+            filter(lambda part: cand in part, example_partition8)
+        )) for cand in candidate_order])
+
+    return get_modularity(matrix, labels, resolution=resolution)
+
 
 def first_second_score(profile: PreferenceProfile, partitions):
     score = np.trace(blockiness_mtx(profile, partitions))

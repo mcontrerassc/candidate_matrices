@@ -20,7 +20,8 @@ def gen_mentions_partition(profile:PreferenceProfile, cands, k):
     return partition
 
 def random_partition(cands, k):
-    shuffled = cands[:]
+    shuffled = cands[:] ## NOTE: this operation is not supported on tuples,
+                        ## but it looks like all we're doing is making a copy of "cands", so this should be an easy fix
     random.shuffle(shuffled)
     partition = [[] for _ in range(k)]
     for idx, item in enumerate(shuffled):

@@ -50,6 +50,9 @@ def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolu
 
 def find_distance_to_slate_optimal_bipartition(profile: PreferenceProfile):
     ''''
+        TODO: add some parameters to indicate that this method is
+        writing to current directory
+
         computes the distance to slate scores for all possible
             partitions of the given profile, wrt the ballots in the given
             profile. 
