@@ -86,6 +86,7 @@ def relative_size_score_generator(profile: PreferenceProfile, k):
         for i, t in enumerate(partition):
             sizes[t] += menshons[i]
         return 1/np.prod(sizes)
+    fast_relative_size_score.score_name = "rel_size"
     return fast_relative_size_score
 
 def make_adjacency_matrix(profile: PreferenceProfile,candidate_to_index):
@@ -142,7 +143,7 @@ def proportional_successive_matrix(profile: PreferenceProfile):
             adjacencies[i, :] /= menshons[cand]
     return adjacencies
 
-def cut_score_generator(profile: PreferenceProfile):
+def cut_score_generator(profile: PreferenceProfile, k=None):
     adjacencies = fast_adj(profile)
     def fast_cut_score(partition8):
         sum = 0
@@ -151,6 +152,7 @@ def cut_score_generator(profile: PreferenceProfile):
                 if s != t:
                     sum += adjacencies[i, j+i+1] + adjacencies[j+i+1, i]
         return sum
+    fast_cut_score.score_name = "cut"
     return fast_cut_score
 
 def cut_score(profile: PreferenceProfile, partitions): #data structure is a list of lists of candidates
@@ -174,7 +176,7 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         ]
     return sum
 
-def make_not_bad(matrix): #this matrix better be in canonical order or so help me god
+def make_not_bad(matrix, example_partition8= None, matrix_name = "matrix"): #this matrix better be in canonical order or so help me god
     def fast_score(partition8):
         summ = 0
         for i, s in enumerate(partition8[:-1]):
@@ -182,19 +184,29 @@ def make_not_bad(matrix): #this matrix better be in canonical order or so help m
                 if s != t:
                     summ += matrix[i, j+i+1] + matrix[j+i+1, i]
         return summ
+    #name should look like <matrix>_not_bad
+    name = f"{matrix_name}_not_bad"
+    fast_score.score_name = name
     return fast_score
 
-def make_good(matrix, example_partition8): #canonical order or riot
+def make_good(matrix, example_partition8, matrix_name = "matrix"): #canonical order or riot
     #if we just summed the diagonal entries of the matrix, this would usually give us a score we want to maximize
     #to make it a score we want to minimize, keep the sum over each slate separate, and take their reciprocals -- so now we want to maximize the score of each slate separately
     #this also makes it so the resulting score dislikes empty slates
+    if type(example_partition8) == np.ndarray:
+        k = max(example_partition8) + 1
+    elif type(example_partition8) == int:
+        k = int(example_partition8) + 1
     def fast_score(partition8):
-        slate_sums = np.zeros(max(example_partition8)+1)+.01
+        slate_sums = np.zeros(k) + .01
         for i, s in enumerate(partition8[:-1]):
             for j, t in enumerate(partition8[i+1:]):
                 if s == t:
                     slate_sums[s] += matrix[i, j+i+1] + matrix[j+i+1, i]
         return sum(1/s for s in slate_sums)
+    #name should look like <matrix>_good
+    name = f"{matrix_name}_good"
+    fast_score.score_name = name
     return fast_score
 
 def first_second_score(profile: PreferenceProfile, partitions):
