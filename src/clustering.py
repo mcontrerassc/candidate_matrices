@@ -21,10 +21,10 @@ def create_graph_louvain_bm(boost: np.ndarray):
     return G
 
 
-
 def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolution: float, randomize: bool):
     mentions_dict = mentions(profile)
-    all_cands_sorted_by_mentions = sorted(profile.candidates, reverse=True, key = lambda x: mentions_dict[x])
+    # DO NOT SORT OR THE VIZ WILL GET *ANGRY* (you'll get a nonsensical matrix) D:
+    #all_cands_sorted_by_mentions = sorted(profile.candidates, reverse=True, key = lambda x: mentions_dict[x])
     partition = algorithms.louvain(G, weight='weight', resolution = resolution, randomize = randomize)
     modularity_score = evaluation.newman_girvan_modularity(G, partition, weight='weight').score
     clusters = {}
@@ -34,11 +34,11 @@ def louvain_partition_from_graph(G: nx.Graph, profile: PreferenceProfile, resolu
 
     # from chris' code: sort by mentions within cluster
     clusters = {cluster_id: sorted(cluster_list, reverse = True, 
-                key = lambda x: mentions_dict[all_cands_sorted_by_mentions[x]]) for cluster_id, cluster_list in clusters.items()}
+                key = lambda x: mentions_dict[profile.candidates[x]]) for cluster_id, cluster_list in clusters.items()}
     partition = []
     for cluster_id, cluster_list in clusters.items():
         list_cands = []
         for node in cluster_list:
-            list_cands.append(all_cands_sorted_by_mentions[node])
+            list_cands.append(profile.candidates[node])
         partition.append(list_cands)
     return partition, modularity_score
