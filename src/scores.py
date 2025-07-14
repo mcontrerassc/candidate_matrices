@@ -175,6 +175,51 @@ def cut_score(profile: PreferenceProfile, partitions): #data structure is a list
                         ]
     return sum
 
+def split_matrix(A):
+    A_pos = np.where(A > 0, A, 0)
+    A_neg = np.where(A < 0, A, 0)
+    return A_pos, A_neg
+
+def make_modularity_matrix(A):
+    kout = A.sum(axis=1)  # shape (n,)
+    kin = A.sum(axis=0)  # shape (n,)
+    m = A.sum()
+
+    if m == 0:
+        return np.zeros_like(A)
+
+    expected = np.outer(kout, kin) / m
+    B = A - expected
+    #set all diagonal entries to 0
+    np.fill_diagonal(B, 0)
+    return B
+
+def modularity_from_B(B, m, assignment, mod_type = 'standard', pm='pos'):
+    assert pm in {'pos', 'neg'}
+    n = len(assignment)
+    Q = 0.0
+    if m == 0:
+        return 0.0
+
+    for i in range(n):
+        for j in range(n):
+            same_group = (assignment[i] == assignment[j])
+            if mod_type == 'standard':
+                if (pm == 'pos' and same_group) or (pm == 'neg' and not same_group):
+                    Q += B[i, j]
+            elif mod_type == 'hybrid':
+                if (pm == 'pos' and same_group) or (pm == 'neg' and not same_group):
+                    Q += B[i, j]
+                else:
+                    Q -= B[i, j]
+            elif mod_type == 'reverse':
+                if (pm == 'pos' and not same_group) or (pm == 'neg' and same_group):
+                    Q -= B[i, j]
+            else:
+                raise ValueError(f"Unknown mod_type: {mod_type}")
+
+    return Q / m
+
 def make_not_bad(matrix, example_partition8= None, matrix_name = "matrix"): #this matrix better be in canonical order or so help me god
     def fast_score(partition8):
         summ = 0
