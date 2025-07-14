@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from src.markov import forward_convert, backward_convert
 import json
+import matplotlib.colors as mcolors
 
-def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None):
+def old_show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None):
     fig, ax = plt.subplots()
     if title:
         plt.title(title)
@@ -29,7 +30,42 @@ def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None):
 
     plt.show()
 
-def viz_partition(partition, boost, candidates, cmap='PRGn'):
+
+def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None, centered=False):
+    fig, ax = plt.subplots()
+
+    if centered:
+        vmin = np.min(M)
+        vmax = np.max(M)
+        norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+    else:
+        norm = None
+
+    if title:
+        plt.title(title)
+
+    img = ax.imshow(M, cmap=cmap, norm=norm)
+    fig.colorbar(img)
+
+    if labels:
+        ax.set_xticks(range(M.shape[1]), minor=False)
+        ax.set_yticks(range(M.shape[0]), minor=False)
+        ax.grid(False)
+        ax.set_xticklabels(labels)
+        ax.set_yticklabels(labels)
+        ax.tick_params(axis='x', labelrotation=90)
+        ax.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False)
+
+    ax.set_aspect('auto')
+
+    if boundaries is not None and len(boundaries) > 0:
+        for b in boundaries:
+            ax.axhline(b - 0.5, color='black', linewidth=1)
+            ax.axvline(b - 0.5, color='black', linewidth=1)
+
+    plt.show()
+
+def viz_partition(partition, boost, candidates, cmap='PRGn', centered=False):
     if type(partition) == np.ndarray:
         partish = backward_convert(partition, candidates)
     else:
@@ -52,7 +88,8 @@ def viz_partition(partition, boost, candidates, cmap='PRGn'):
         permutation_matrix.T @ boost @ permutation_matrix,
         labels=ordering,
         cmap=cmap,
-        boundaries=boundaries
+        boundaries=boundaries,
+        centered=centered
     )
 
 def viz_best_partitions(
