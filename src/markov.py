@@ -47,7 +47,7 @@ def fast_proposal_generator(partition8):
     ncand = len(partition8)
     def fast_proposal(partition):
         new_partition = partition.copy()
-        new_partition[np.random.randint(0, ncand-1)] = np.random.randint(0, k+1) 
+        new_partition[np.random.randint(0, ncand)] = np.random.randint(0, k+1) 
         return new_partition
     return fast_proposal
 
