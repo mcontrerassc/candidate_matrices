@@ -8,13 +8,15 @@ import numpy as np
 from typing import Optional, Union, Tuple
 from scipy import sparse
 import networkx as nx
-from sknetwork.utils.check import get_probs
+from sknetwork.utils.check import check_format
 from sknetwork.utils.format import get_adjacency
 from sknetwork.utils.membership import get_membership
 from cdlib import algorithms, evaluation
 from collections import defaultdict
 from networkx.algorithms import community
 import sknetwork as skn
+from src.scores import make_good, make_not_bad, fast_adj
+
 
 
 def create_graph_louvain_bm(boost: np.ndarray):
@@ -195,82 +197,99 @@ def louvain_directed_hybrid(A, max_iter=100):
     return assignment
 
 
+def get_directed_modularity(adjacency, labels, resolution=1.0, nature = 'pos'):
+    adjacency = check_format(adjacency)
+    m = adjacency.data.sum()
 
-# method borrowed from scikit-network, modified for our Q^-
-def get_modularity_neg(input_matrix: Union[sparse.csr_matrix, np.ndarray], labels: np.ndarray,
-                   labels_col: Optional[np.ndarray] = None, weights: str = 'degree',
-                   resolution: float = 1, return_all: bool = False) -> Union[float, Tuple[float, float, float]]:
-    """Modularity of a clustering.
+    if nature == 'pos':
+        membership = get_membership(labels).astype(float).toarray()
+    elif nature == 'neg':
+        membership = 1 - get_membership(labels).astype(float).toarray()
+    
+    k_out = adjacency.sum(axis=1).A1  # row sums
+    k_in = adjacency.sum(axis=0).A1  # col sums
 
-    The modularity of a clustering is
+    # actual edge weight 
+    fit = membership.T.dot(adjacency.dot(membership)).diagonal().sum() 
 
-    :math:`Q = \\dfrac{1}{w} \\sum_{i,j}\\left(A_{ij} - \\gamma \\dfrac{w_iw_j}{w}\\right)\\delta_{c_i,c_j}`
-    for graphs,
+    # expected edge weight
+    expected = (membership.T.dot(k_out).dot(membership.T.dot(k_in))) / m
 
-    :math:`Q = \\dfrac{1}{w} \\sum_{i,j}\\left(A_{ij} - \\gamma \\dfrac{d^+_id^-_j}{w}\\right)\\delta_{c_i,c_j}`
-    for directed graphs,
+    return (fit - resolution * expected)/m
 
-    where
 
-    * :math:`c_i` is the cluster of node :math:`i`,\n
-    * :math:`w_i` is the weight of node :math:`i`,\n
-    * :math:`w^+_i, w^-_i` are the out-weight, in-weight of node :math:`i` (for directed graphs),\n
-    * :math:`w = 1^TA1` is the total weight,\n
-    * :math:`\\delta` is the Kronecker symbol,\n
-    * :math:`\\gamma \\ge 0` is the resolution parameter.
+## mother louvain -> for now can take 3 scores, Q+, make_good, make_not_bad
+## TODO @michelle : hybrid, make honest not bad?, Q^- (use adj neg) ??!
+def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj):
+    adjacency = check_format(adjacency_pos)
+    adjacency = adjacency + adjacency.T  
+    adjacency = adjacency.tocsr()
+    n = adjacency.shape[0]
 
-    Parameters
-    ----------
-    input_matrix :
-        Adjacency matrix or biadjacency matrix of the graph.
-    labels :
-        Labels of nodes.
-    labels_col :
-        Labels of column nodes (for bipartite graphs).
-    weights :
-        Weighting of nodes (``'degree'`` (default) or ``'uniform'``).
-    resolution:
-        Resolution parameter (default = 1).
-    return_all:
-        If ``True``, return modularity, fit, diversity.
+    #  each node in its own cluster
+    labels = np.arange(n)
 
-    Returns
-    -------
-    modularity : float
-    fit: float, optional
-    diversity: float, optional
+    for i in range(max_iter):
+        moved = False
 
-    Example
-    -------
-    >>> from sknetwork.clustering import get_modularity
-    >>> from sknetwork.data import house
-    >>> adjacency = house()
-    >>> labels = np.array([0, 0, 1, 1, 0])
-    >>> float(np.round(get_modularity(adjacency, labels), 2))
-    0.11
-    """
-    adjacency, bipartite = get_adjacency(input_matrix.astype(float))
+        # the nondeterministic component of louvain -> nodes are chekced in != orders
+        for node in np.random.permutation(n):
+            current_label = labels[node]
+            neighs = adjacency.indices[adjacency.indptr[node]:adjacency.indptr[node+1]]
+            neigh_labels = np.unique(labels[neighs])
 
-    if bipartite:
-        if labels_col is None:
-            raise ValueError('For bipartite graphs, you must specify the labels of both rows and columns.')
-        else:
-            labels = np.hstack((labels, labels_col))
+            # TODO make this float +- inf depending on score, 0 works well for now but think ab edge cases
+            best_gain = 0
+            if score == 'make_not_bad' or score == 'make_good':
+                best_gain = float("inf")
+            best_label = current_label
 
-    if len(labels) != adjacency.shape[0]:
-        raise ValueError('Dimension mismatch between labels and input matrix.')
+            for label in neigh_labels:
+                if label == current_label:
+                    continue
 
-    probs_row = get_probs(weights, adjacency)
-    probs_col = get_probs(weights, adjacency.T)
-    membership = 1 - get_membership(labels).astype(float).toarray()
+                # the new tentative cluster for curr node
+                old_label = labels[node]
+                labels[node] = label
 
-    fit = membership.T.dot(adjacency.dot(membership)).diagonal().sum() / adjacency.data.sum()
-    div = membership.T.dot(probs_col).dot(membership.T.dot(probs_row))
-    mod = fit - resolution * div
-    if return_all:
-        return mod, fit, div
-    else:
-        return mod
+                if (score == 'make_good'):
+                    new_mod = make_good(boost, labels, "matrix")(labels)
+                    labels[node] = old_label
+                    old_mod = make_good(boost, labels, "matrix")(labels)
+                    gain = new_mod - old_mod
+
+                    if gain < best_gain:
+                        best_gain = gain
+                        best_label = label
+                
+                elif (score == 'make_not_bad'):
+                    new_mod = make_not_bad(adj, labels, "matrix")(labels)
+                    labels[node] = old_label
+                    old_mod = make_not_bad(adj, labels, "matrix")(labels)
+                    gain = new_mod - old_mod
+
+                    if gain < best_gain:
+                        best_gain = gain
+                        best_label = label
+
+                elif (score == 'green_diagonal'):
+                    new_mod = get_directed_modularity(adjacency_pos, labels, resolution)
+                    labels[node] = old_label
+                    old_mod = get_directed_modularity(adjacency_pos, labels, resolution)
+                    gain = new_mod - old_mod
+
+                    if gain > best_gain:
+                        best_gain = gain
+                        best_label = label
+
+            if best_label != current_label:
+                labels[node] = best_label
+                moved = True
+
+        if not moved:
+            break  # no improvement
+
+    return labels
     
 def create_graph_louvain_signed(boost: np.ndarray, pos: bool):
     n = boost.shape[0]
@@ -295,11 +314,14 @@ def labels_to_partitions(labels, candidates):
     return [clusters[k] for k in sorted(clusters.keys())]
 
 # resolution kept as 1 
-def louvain_partition_signed_graph(G, profile, resolution=1):
-    adj = sparse.csr_matrix(nx.to_scipy_sparse_array(G, weight='weight', format='csr'))
-    model = skn.clustering.Louvain(resolution=resolution)   
-    labels = model.fit_predict(adj)
+def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score='green_diagonal'):
+    adj = fast_adj(profile)
+    G_neg = create_graph_louvain_signed(boost, False)
+    G_pos = create_graph_louvain_signed(boost, True)
+    adj_pos = sparse.csr_matrix(nx.to_scipy_sparse_array(G_pos, weight='weight', format='csr'))
+    adj_neg = sparse.csr_matrix(nx.to_scipy_sparse_array(G_neg, weight='weight', format='csr'))
+    labels = homemade_louvain(adj_pos, adj_neg, resolution,iter,score, boost,adj)
     partition = labels_to_partitions(labels, list(profile.candidates))
-    modularity = get_modularity_neg(adj, labels)
+    modularity = get_directed_modularity(adj, labels)
     return partition, modularity
 
