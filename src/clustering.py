@@ -25,7 +25,7 @@ def create_graph_louvain_bm(boost: np.ndarray):
     G = nx.Graph()
     for i in range(n):
         for j in range(i+1, n):
-            weight = (boost[i, j] + boost[j, i])/2
+            weight = (boost[i, j] + boost[j, i])
             if weight > 0:  # only positive weights -- eeek algos.louvain doesn't work with negs?  , TODO think ab this later
                 G.add_edge(i, j, weight=weight)
     return G
@@ -283,6 +283,19 @@ def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, 
                         best_gain = gain
                         best_label = label
 
+                elif (score == 'hybrid'):
+                    new_mod = get_directed_modularity(adjacency_pos, labels, resolution) 
+                    + get_directed_modularity(adjacency_neg, labels, resolution, nature = 'neg')
+                    labels[node] = old_label
+                    old_mod = get_directed_modularity(adjacency_pos, labels, resolution) 
+                    + get_directed_modularity(adjacency_neg, labels, resolution, nature = 'neg')
+                    gain = new_mod - old_mod
+
+                    if gain > best_gain:
+                        best_gain = gain
+                        best_label = label
+
+
             if best_label != current_label:
                 labels[node] = best_label
                 moved = True
@@ -306,15 +319,14 @@ def create_graph_louvain_signed(boost: np.ndarray, pos: bool):
             G.add_edge(i, j, weight = boost[i, j])
     return G
 
-# convert labels to a partition
+# helper to convert labels to a partition
 def labels_to_partitions(labels, candidates):
     clusters = defaultdict(list)
     for label, candidate in zip(labels, candidates):
         clusters[label].append(candidate)
-    # return as list of lists sorted by cluster label (optional)
     return [clusters[k] for k in sorted(clusters.keys())]
 
-# resolution kept as 1 
+# resolution kept as 1, default green_diag
 def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score='green_diagonal'):
     adj = fast_adj(profile)
     G_neg = create_graph_louvain_signed(boost, False)
@@ -329,5 +341,8 @@ def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score
         metric = make_not_bad(boost, labels, "matrix")(labels)
     elif score == 'make_good':
         metric = make_good(boost, labels, "matrix")(labels)
+    elif score == 'hybrid':
+        metric = get_directed_modularity(adj_pos, labels)
+        +get_directed_modularity(adj_neg, labels, nature = 'neg')
     return partition, metric
 
