@@ -221,10 +221,11 @@ def get_directed_modularity(adjacency, labels, resolution=1.0, nature = 'pos'):
 ## mother louvain -> for now can take 3 scores, Q+, make_good, make_not_bad
 ## TODO @michelle : hybrid, make honest not bad?, Q^- (use adj neg) ??!
 def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj):
-    adjacency = check_format(adjacency_pos)
-    adjacency = adjacency + adjacency.T  
-    adjacency = adjacency.tocsr()
-    n = adjacency.shape[0]
+    # get each candidate's neighs, considering pos and neg for adjecencies @michelle check this logic later!
+    graph_structure = (adjacency_pos + adjacency_neg.T).astype(bool).astype(int).tocsr()
+    neighbors_list = [ graph_structure.indices[graph_structure.indptr[i]:graph_structure.indptr[i+1]]
+    for i in range(graph_structure.shape[0])]
+    n = len(neighbors_list)
 
     #  each node in its own cluster
     labels = np.arange(n)
@@ -235,8 +236,8 @@ def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, 
         # the nondeterministic component of louvain -> nodes are chekced in != orders
         for node in np.random.permutation(n):
             current_label = labels[node]
-            neighs = adjacency.indices[adjacency.indptr[node]:adjacency.indptr[node+1]]
-            neigh_labels = np.unique(labels[neighs])
+            neighbors = neighbors_list[node]
+            neigh_labels = np.unique(labels[neighbors])
 
             # TODO make this float +- inf depending on score, 0 works well for now but think ab edge cases
             best_gain = 0
