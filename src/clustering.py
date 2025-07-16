@@ -323,6 +323,11 @@ def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score
     adj_neg = sparse.csr_matrix(nx.to_scipy_sparse_array(G_neg, weight='weight', format='csr'))
     labels = homemade_louvain(adj_pos, adj_neg, resolution,iter,score, boost,adj)
     partition = labels_to_partitions(labels, list(profile.candidates))
-    modularity = get_directed_modularity(adj, labels)
-    return partition, modularity
+    if score == 'green_diagonal':
+        metric = get_directed_modularity(adj_pos, labels)
+    elif score == 'make_not_bad':
+        metric = make_not_bad(boost, labels, "matrix")(labels)
+    elif score == 'make_good':
+        metric = make_good(boost, labels, "matrix")(labels)
+    return partition, metric
 
