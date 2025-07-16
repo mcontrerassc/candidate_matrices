@@ -1,19 +1,24 @@
 import click
 import json
 import jsonlines as jl
-import random
+import numpy as np
 import pickle
 from votekit import PreferenceProfile
 import warnings
 from src.markov import forward_convert, backward_convert, random_partition, calibrate_scores, fast_tilted_run3, fast_short_burst2
-from src.scores import fast_adj, proportional_successive_matrix, cut_score_generator, relative_size_score_generator, make_good, make_not_bad
+from src.scores import fast_adj, proportional_successive_matrix, cut_score_generator, relative_size_score_generator, make_good, make_not_bad, fpv_boost_matrix, sum_mass, make_boost_matrix, balanced_sum_mass, hybrid_modularity, standard_modularity
 #from src.cleaning
+
+#it turns out schmillion = 30
 
 #warnings.filterwarnings("ignore")
 
 matrix_types = {
     "ADJ": fast_adj,
     "PSM": proportional_successive_matrix,
+    "boost": make_boost_matrix,
+    "FPV": fpv_boost_matrix,
+    #"top2boost"
 }
 
 score_types = {
@@ -21,14 +26,18 @@ score_types = {
     "rel": relative_size_score_generator,
     "good": make_good,
     "notbad": make_not_bad,
+    "sum_mass": sum_mass,
+    "mod_standard": standard_modularity,
+    "mod_hybrid": hybrid_modularity,
+    "balanced_mass": balanced_sum_mass,
 }
 
 runner_types = {
     "tilted": fast_tilted_run3,
-    "short_burst": fast_short_burst2, #not implemented yet
+    "short_burst": fast_short_burst2, 
 }
 
-matrix_scores = ["good", "notbad"] #modularity should be added here too eventually
+matrix_scores = ["good", "notbad"] #for the sous-chef, all scores are assumed to be matrix scores.
 
 def thechef( #let him cook
         path_to_data:str,
@@ -88,61 +97,39 @@ def thechef( #let him cook
             "matrix1": matrix1,
             "matrix2": matrix2,
         })
-#
-#def run_election(
-#    ballot_generator: str,
-#    num_voters: int,
-#    num_seats: int,
-#    ballot_generator_kwargs: dict,
-#    election_type: str,
-#    num_iterations: int,
-#    output_file: click.Path#,
-#):
-#    with jl.open(output_file, "w") as writer:
-#        for _ in range(num_iterations):
-#            profile = (
-#                BG_TYPES[ballot_generator]
-#                .from_params(**ballot_generator_kwargs)
-#                .generate_profile(num_voters)
-#            )
-#            assert isinstance(profile, PreferenceProfile)
 
-#            election: elec.Election = ELECTION_TYPES[election_type](
-#                profile, m=num_seats, tiebreak="random"
-#            )
-#            winners = winners = [next(iter(s)) for s in election.get_elected() if s]
-#            writer.write({"winners": winners})
-
-#    print(f"Finished successfully! Results saved to {output_file}")
-
-
-# def run_election(
-#     ballot_generator: str,
-#     num_voters: int,
-#     num_seats: int,
-#     ballot_generator_kwargs: dict,
-#     election_type: str,
-#     num_iterations: int,
-#     output_file: click.Path,
-# ):
-#     with jl.open(output_file, "w") as writer:
-#         for _ in range(num_iterations):
-#             profile = (
-#                 BG_TYPES[ballot_generator]
-#                 .from_params(**ballot_generator_kwargs)
-#                 .generate_profile(num_voters)
-#             )
-#             assert isinstance(profile, PreferenceProfile)
-
-#             # Random bad constructor
-#             if random.random() < 0.01:
-#                 election: elec.Election = ELECTION_TYPES[election_type](profile, m=1000)
-#             election: elec.Election = ELECTION_TYPES[election_type](
-#                 profile, m=num_seats, tiebreak="random"
-#             )
-#             winners = winners = [next(iter(s)) for s in election.get_elected() if s]
-#             writer.write({"winners": winners})
-
+def the_sous_chef( #when we don't take linear combinations of two scores
+        path_to_data:str,
+        run_type:str,
+        score:str,
+        matrix:str,
+        k: int = 3,
+        #output_file: click.Path = "./outputs/best/sous_chef_results.jsonl" #currently the chains themselves are in charge of exporting their results
+):
+    with open(path_to_data, 'rb') as file:
+        loaded = pickle.load(file)
+    profile = loaded['profile']
+    starting_partition = np.array([k-1 for _ in profile.candidates], dtype=np.int8)
+    M1 = matrix_types[matrix](profile)
+    score_fn = score_types[score](M1, example_partition8=starting_partition, matrix_name=matrix)
+    print(f"Running sous-chef with score function: {score_fn.score_name}")
+    if run_type == "tilted":
+        best = fast_tilted_run3(
+            starting_partition,
+            score_fn,
+            iterations=1000000,  #how much is a schmillion?
+        )
+    elif run_type == "short_burst":
+        best = fast_short_burst2(
+            starting_partition,
+            score_fn,
+            burst_size=10,
+            num_bursts=1000  # 50*20,000 = 1 (sch)million
+        )
+    else:
+        raise ValueError(f"Unknown run type: {run_type}. Must be one of {list(runner_types.keys())}.")
+    #save best as the last line of a jsonl, and also record combined_score.score_name
+    
 
 # ==============================================#
 # Now make a little CLI to wrap this function in
@@ -161,37 +148,36 @@ def thechef( #let him cook
     default="tilted",
     help="The type of run to perform (e.g., 'tilted' or 'short_burst').",
 )
-@click.option("--score1",
+@click.option("--score",
     type=click.Choice(list(score_types.keys()), case_sensitive=False),
     default="cut",
     help="The first score type to use for the run.",
 )
-@click.option("--score2",
-    type=click.Choice(list(score_types.keys()), case_sensitive=False),
-    default="rel",
-    help="The second score type to use for the run.",
-)
-@click.option("--matrix1",
+@click.option("--matrix",
     type=click.Choice(list(matrix_types.keys()), case_sensitive=False),
     default=None,
     help="The matrix type to use for the first score (if applicable).",
-)
-@click.option("--matrix2",
-    type=click.Choice(list(matrix_types.keys()), case_sensitive=False),
-    default=None,
-    help="The matrix type to use for the second score (if applicable).",
 )
 @click.option("--k",
     type=int,
     default=3,
     help="The number of clusters to use for the partitioning (default is 3).",
 )
-@click.option("--output-file",
-    "-o",
-    type=click.Path(),
-    default = "./outputs/best/chef_results.jsonl",
-    help="Path to save the best partition results.",
-)
+
+def the_sous_chef_cli(
+    path_to_data: str,
+    run_type: str,
+    score: str,
+    matrix: str,
+    k: int,
+):
+    the_sous_chef(
+        path_to_data=path_to_data,
+        run_type=run_type,
+        score=score,
+        matrix=matrix,
+        k=k,
+    )
 
 def thechef_cli(
     path_to_data: str,
@@ -213,7 +199,6 @@ def thechef_cli(
         k=k,
         output_file=output_file,
     )
-
 #def run_election_cli(
 #    ballot_generator: str,
 #    num_voters: int,
@@ -241,4 +226,4 @@ def thechef_cli(
 
 
 if __name__ == "__main__":
-    thechef_cli()
+    the_sous_chef_cli()

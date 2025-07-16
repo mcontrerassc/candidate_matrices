@@ -2,7 +2,9 @@ import numpy as np
 from votekit.pref_profile import PreferenceProfile
 from votekit.utils import mentions
 from itertools import accumulate
-from src.markov import forward_convert, backward_convert
+from src.markov import forward_convert, backward_convert, fast_proposal_generator
+from votekit.matrices import comention, boost_matrix
+from typing import Tuple
 
 def bal_to_tuple(ballot, cand_ref): #blame Chris
     sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
@@ -51,6 +53,111 @@ def blockiness_mtx(profile: PreferenceProfile, partition):
             normed_blockiness[i] = blockiness[i] / column_sums[i]
 
     return normed_blockiness
+
+def fpv_boost_prob(i: str, j: str, pref_profile: PreferenceProfile) -> Tuple[float, float]:
+    candidate_to_index = {candidate: i for i, candidate in enumerate(pref_profile.candidates)}
+    candidates = list(pref_profile.candidates)
+    i_fpv_mentions = 0.0
+    j_mentions = 0.0
+    fpv_i_j_mentions = 0.0
+    for ballot in pref_profile.ballots:
+        bal_tuple, weight = bal_to_tuple(ballot, candidate_to_index)
+        bal_str = tuple(candidates[idx] for idx in bal_tuple)
+        if (bal_str[0] == i):
+            i_fpv_mentions += weight
+        if comention(j, ballot):
+            j_mentions += weight
+            if (bal_str[0] == i):
+                fpv_i_j_mentions += weight
+    return (
+        float(fpv_i_j_mentions) / j_mentions if (j_mentions != 0) else np.nan,
+        (
+            float(i_fpv_mentions) / pref_profile.total_ballot_wt
+            if (pref_profile.total_ballot_wt != 0)
+            else np.nan
+        ),
+    )
+def fpv_boost_matrix(pref_profile: PreferenceProfile) -> np.ndarray:
+    candidates = list(pref_profile.candidates)
+    fpv_boost_matrix = {c: {c: 0.0 for c in candidates} for c in candidates}
+    for i in candidates:
+        for j in candidates:
+            if i != j:
+                cond, uncond = fpv_boost_prob(i, j, pref_profile)
+                fpv_boost_matrix[i][j] = cond - uncond
+            else:
+                fpv_boost_matrix[i][j] = np.nan
+    size = len(candidates)
+    fpv_boost_array = np.empty((size, size))
+    for i, cand_i in enumerate(candidates):
+        for j, cand_j in enumerate(candidates):
+            fpv_boost_array[i, j] = fpv_boost_matrix[cand_i][cand_j]
+    return np.nan_to_num(fpv_boost_array)
+
+def make_boost_matrix(profile: PreferenceProfile, candidates = None, example_partition8=None):
+    boost  = boost_matrix(profile, candidates = list(profile.candidates))
+    boost_clean = np.nan_to_num(boost)
+    return boost_clean
+
+def sum_mass(M, matrix_name, example_partition8=None): #this score expects a matrix with negative and positive entries (like a boost matrix)
+    def score(partition8):
+        summ = 0
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i:]):
+                if s == t:
+                    summ += M[i, j+i] + M[j+i, i]
+        return -summ
+    name = f"{matrix_name}_sum_mass"
+    score.score_name = name
+    return score
+
+
+
+def balanced_sum_mass(M, matrix_name, factor = 1,example_partition8=None): #this score expects a matrix with positive entries only, and punishes slates that are too small
+    #only keep positive entries
+    if type(example_partition8) == np.ndarray:
+        k = max(example_partition8) + 1
+    elif type(example_partition8) == int:
+        k = example_partition8
+    M_pos = np.where(M > 0, M, 0)
+    def score(partition8):
+        summ = 0
+        for i, s in enumerate(partition8[:-1]):
+            for j, t in enumerate(partition8[i+1:]):
+                if s == t:
+                    summ += M[i, j+i+1] + M[j+i+1, i]
+        return summ
+    eye = np.eye(M.shape[0])
+    my_head_is_empty = make_good(eye, example_partition8=example_partition8, matrix_name='eye')
+    #run a short (1000 steps) chain to callibrate the score to have median 100 and standard deviation 25
+    proposal = fast_proposal_generator(example_partition8)
+    cur = example_partition8.copy()
+    mass_scores = []
+    eye_scores = []
+    for _ in range(1000):
+        cur = proposal(cur)
+        mass_scores.append(score(cur))
+        eye_scores.append(my_head_is_empty(cur))
+    mass_scores = np.array(mass_scores)
+    eye_scores = np.array(eye_scores)
+    mass_median = np.median(mass_scores)
+    #mass_iqr = np.percentile(mass_scores, 75) - np.percentile(mass_scores, 25)
+    eye_median = np.median(eye_scores)
+    #eye_std = np.std(eye_scores)
+    #mass_std = np.std(mass_scores)
+    #eye_IQR = np.percentile(eye_scores, 75) - np.percentile(eye_scores, 25)
+    #scale the scores to have median 100
+    mass_scale = 100/mass_median
+    #mass_scale = 1
+    #mass_shift = 100 - mass_median*mass_scale
+    eye_scale = 100/eye_median 
+    #eye_shift = 100 - eye_median*eye_scale
+    #print(eye_median, eye_IQR, eye_std, mass_median, mass_iqr, mass_std)
+    def scaled_score(partition8):
+        return -(mass_scale * score(partition8) ) + (factor*eye_scale * my_head_is_empty(partition8)) 
+    name = f"{matrix_name}_balanced_sum_mass"
+    scaled_score.score_name = name
+    return scaled_score
 
 def gen_share_mentions(profile: PreferenceProfile, key_type = "string"):
     num_mentions = mentions(profile)
@@ -220,6 +327,29 @@ def modularity_from_B(B, m, assignment, mod_type = 'standard', pm='pos'):
 
     return Q / m
 
+def hybrid_modularity(M, matrix_name, example_partition8=None):
+    A,B = split_matrix(M)
+    A_mod = make_modularity_matrix(A)
+    m_A = A.sum()
+    B_mod = make_modularity_matrix(-B)
+    m_B = -B.sum()
+    def score(partition8):
+        Q_A = modularity_from_B(A_mod, m_A, partition8, mod_type='standard', pm='pos')
+        Q_B = modularity_from_B(B_mod, m_B, partition8, mod_type='standard', pm='neg')
+        return -Q_A - Q_B
+    score.score_name = f"{matrix_name}_hybrid"
+    return score
+
+def standard_modularity(M, matrix_name, example_partition8=None):
+    A,B = split_matrix(M)
+    A1 = make_modularity_matrix(A)
+    m_A = A.sum()
+    def score(partition8):
+        Q = modularity_from_B(B, m_A, partition8, mod_type='standard', pm='pos')
+        return -Q
+    score.score_name = f"{matrix_name}_standard"
+    return score
+
 def make_not_bad(matrix, example_partition8= None, matrix_name = "matrix"): #this matrix better be in canonical order or so help me god
     def fast_score(partition8):
         summ = 0
@@ -244,9 +374,9 @@ def make_good(matrix, example_partition8, matrix_name = "matrix"): #canonical or
     def fast_score(partition8):
         slate_sums = np.zeros(k) + .01
         for i, s in enumerate(partition8[:-1]):
-            for j, t in enumerate(partition8[i+1:]):
+            for j, t in enumerate(partition8[i:]):
                 if s == t:
-                    slate_sums[s] += matrix[i, j+i+1] + matrix[j+i+1, i]
+                    slate_sums[s] += matrix[i, j+i] + matrix[j+i, i]
         return sum(1/s for s in slate_sums)
     #name should look like <matrix>_good
     name = f"{matrix_name}_good"

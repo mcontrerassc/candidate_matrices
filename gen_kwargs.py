@@ -1,60 +1,40 @@
 import jsonlines
 
-runner_types = ["tilted", "short_burst"]
-score_types = ["cut", "rel", "good", "notbad"]
-matrix_types = ["ADJ", "PSM"]
-matrix_scores = ["good", "notbad"]
+runner_types = ["short_burst"]
+
+score_types = [
+    "good",
+    "sum_mass",
+    "mod_standard",
+    "mod_hybrid",
+    "balanced_mass",
+]
+
+matrix_types = ["ADJ", "PSM", "boost", "FPV"]
+
+# Mapping of which scores are allowed with which matrices
+allowed_matrices_by_score = {
+    "good": {"ADJ", "PSM"},
+    "balanced_mass": {"ADJ", "PSM"},
+    "sum_mass": {"boost", "FPV"},
+    "mod_hybrid": {"boost", "FPV"},
+    "mod_standard": {"ADJ", "PSM", "boost", "FPV"}, 
+}
 
 datafile = "./data/Portland_D4.pkl"
 k = 3
 
 with jsonlines.open("schmillion_params.jsonl", mode="w") as writer:
     for run in runner_types:
-        for s1 in score_types:
-            for s2 in score_types:
-                # cases
-                if s1 in matrix_scores and s2 in matrix_scores:
-                    for m1 in matrix_types:
-                        for m2 in matrix_types:
-                            writer.write({
-                                "run_type": run,
-                                "score1": s1,
-                                "score2": s2,
-                                "matrix1": m1,
-                                "matrix2": m2,
-                                "k": k,
-                                "path_to_data": datafile
-                            })
-                elif s1 in matrix_scores:
-                    for m1 in matrix_types:
-                        writer.write({
-                            "run_type": run,
-                            "score1": s1,
-                            "score2": s2,
-                            "matrix1": m1,
-                            "matrix2": None,
-                            "k": k,
-                            "path_to_data": datafile
-                        })
-                elif s2 in matrix_scores:
-                    for m2 in matrix_types:
-                        writer.write({
-                            "run_type": run,
-                            "score1": s1,
-                            "score2": s2,
-                            "matrix1": None,
-                            "matrix2": m2,
-                            "k": k,
-                            "path_to_data": datafile
-                        })
-                else:
-                    writer.write({
-                        "run_type": run,
-                        "score1": s1,
-                        "score2": s2,
-                        "matrix1": None,
-                        "matrix2": None,
-                        "k": k,
-                        "path_to_data": datafile
-                    })
+        for score in score_types:
+            legal_matrices = allowed_matrices_by_score.get(score, set(matrix_types))
+            for matrix in legal_matrices:
+                writer.write({
+                    "run_type": run,
+                    "score": score,
+                    "matrix": matrix,
+                    "k": k,
+                    "path_to_data": datafile
+                })
+
 print("schmillion_params.jsonl created.")
