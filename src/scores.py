@@ -4,11 +4,16 @@ from votekit.utils import mentions
 from itertools import accumulate
 from src.markov import forward_convert, backward_convert, fast_proposal_generator
 from votekit.matrices import comention, boost_matrix
+from votekit.ballot import Ballot
 from typing import Tuple
 
 def bal_to_tuple(ballot, cand_ref): #blame Chris
     sane_tuple = tuple(set(fset).pop() for fset in ballot.ranking)
     return tuple(cand_ref[c] for c in sane_tuple), ballot.weight
+
+def tuple_to_bal(tup, weight, candidates):
+    ranking = [{candidates[i]} for i in tup]
+    return Ballot(ranking=ranking, weight=weight)
 
 # returns an n x n matrix where (i, j) is the row-normalized weight of ballots 
 # where a candidate from block j was ranked 1st and a candidate from block i was ranked 2nd
@@ -345,7 +350,7 @@ def standard_modularity(M, matrix_name, example_partition8=None):
     A1 = make_modularity_matrix(A)
     m_A = A.sum()
     def score(partition8):
-        Q = modularity_from_B(B, m_A, partition8, mod_type='standard', pm='pos')
+        Q = modularity_from_B(A1, m_A, partition8, mod_type='standard', pm='pos')
         return -Q
     score.score_name = f"{matrix_name}_standard"
     return score
@@ -442,3 +447,19 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     ballots_to_distance_first_slate = [distance_to_slate(ballot, partition) for ballot in ballots]
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
     return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
+
+def truncate_profile(profile: PreferenceProfile, L = 3):
+    new_ballots = []
+    candidates = list(profile.candidates)
+    candidate_to_index = {c: i for i, c in enumerate(candidates)}
+    for ballot in profile.ballots:
+        tup, w = bal_to_tuple(ballot, candidate_to_index)
+        new_tup = tup[:L]
+        new_ballot = tuple_to_bal(new_tup, w, candidates)
+        new_ballots.append(new_ballot)
+    return PreferenceProfile(ballots=tuple(new_ballots), candidates=candidates, max_ranking_length=3)
+
+def truncated_boost(profile: PreferenceProfile, L = 3):
+    truncated_profile = truncate_profile(profile, L=L)
+    boost = make_boost_matrix(truncated_profile)
+    return np.nan_to_num(boost)
