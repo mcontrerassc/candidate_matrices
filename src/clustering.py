@@ -13,9 +13,8 @@ from sknetwork.utils.format import get_adjacency
 from sknetwork.utils.membership import get_membership
 from cdlib import algorithms, evaluation
 from collections import defaultdict
-from networkx.algorithms import community
 import sknetwork as skn
-from src.scores import make_good, make_not_bad, fast_adj
+from src.scores import make_good, make_not_bad, fast_adj, sum_mass, proportional_successive_matrix
 
 
 
@@ -196,13 +195,14 @@ def louvain_directed_hybrid(A, max_iter=100):
 
     return assignment
 
-
+## modularity -> code borrowed from sknetwork
 def get_directed_modularity(adjacency, labels, resolution=1.0, nature = 'pos'):
     adjacency = check_format(adjacency)
     m = adjacency.data.sum()
 
     if nature == 'pos':
         membership = get_membership(labels).astype(float).toarray()
+    # if neg, invert membership so that we consider candidates that are not grouped together
     elif nature == 'neg':
         membership = 1 - get_membership(labels).astype(float).toarray()
     
@@ -213,14 +213,14 @@ def get_directed_modularity(adjacency, labels, resolution=1.0, nature = 'pos'):
     fit = membership.T.dot(adjacency.dot(membership)).diagonal().sum() 
 
     # expected edge weight
-    expected = (membership.T.dot(k_out).dot(membership.T.dot(k_in))) / m
+    expected_matrix = np.outer(k_out, k_in) / m
+    expected = membership.T.dot(expected_matrix.dot(membership)).diagonal().sum()
 
     return (fit - resolution * expected)/m
 
 
 ## mother louvain -> for now can take 3 scores, Q+, make_good, make_not_bad
-## TODO @michelle : hybrid, make honest not bad?, Q^- (use adj neg) ??!
-def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj):
+def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj, psm):
     # get each candidate's neighs, considering pos and neg for adjecencies @michelle check this logic later!
     graph_structure = (adjacency_pos + adjacency_neg.T).astype(bool).astype(int).tocsr()
     neighbors_list = [ graph_structure.indices[graph_structure.indptr[i]:graph_structure.indptr[i+1]]
@@ -232,18 +232,16 @@ def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, 
 
     for i in range(max_iter):
         moved = False
+        best_gain = 0
+        best_node = None
+        best_label = None
 
         # the nondeterministic component of louvain -> nodes are chekced in != orders
-        for node in np.random.permutation(n):
+        #for node in np.random.permutation(n):
+        for node in range(n):
             current_label = labels[node]
             neighbors = neighbors_list[node]
             neigh_labels = np.unique(labels[neighbors])
-
-            # TODO make this float +- inf depending on score, 0 works well for now but think ab edge cases
-            best_gain = 0
-            if score == 'make_not_bad' or score == 'make_good':
-                best_gain = float("inf")
-            best_label = current_label
 
             for label in neigh_labels:
                 if label == current_label:
@@ -254,23 +252,13 @@ def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, 
                 labels[node] = label
 
                 if (score == 'make_good'):
-                    new_mod = make_good(boost, labels, "matrix")(labels)
+                    new_mod = make_good(psm, labels, "matrix")(labels)
                     labels[node] = old_label
-                    old_mod = make_good(boost, labels, "matrix")(labels)
+                    old_mod = make_good(psm, labels, "matrix")(labels)
                     gain = new_mod - old_mod
-
-                    if gain < best_gain:
+                    if best_gain is None or gain < best_gain:
                         best_gain = gain
-                        best_label = label
-                
-                elif (score == 'make_not_bad'):
-                    new_mod = make_not_bad(adj, labels, "matrix")(labels)
-                    labels[node] = old_label
-                    old_mod = make_not_bad(adj, labels, "matrix")(labels)
-                    gain = new_mod - old_mod
-
-                    if gain < best_gain:
-                        best_gain = gain
+                        best_node = node
                         best_label = label
 
                 elif (score == 'green_diagonal'):
@@ -279,31 +267,96 @@ def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, 
                     old_mod = get_directed_modularity(adjacency_pos, labels, resolution)
                     gain = new_mod - old_mod
 
-                    if gain > best_gain:
+                    if best_gain is None or gain > best_gain:
                         best_gain = gain
+                        best_node = node
                         best_label = label
 
                 elif (score == 'hybrid'):
-                    new_mod = get_directed_modularity(adjacency_pos, labels, resolution) 
-                    + get_directed_modularity(adjacency_neg, labels, resolution, nature = 'neg')
+                    new_mod = (get_directed_modularity(adjacency_pos, labels, resolution) 
+                    + get_directed_modularity(adjacency_neg, labels, resolution, nature = 'neg'))
                     labels[node] = old_label
-                    old_mod = get_directed_modularity(adjacency_pos, labels, resolution) 
-                    + get_directed_modularity(adjacency_neg, labels, resolution, nature = 'neg')
+                    old_mod = (get_directed_modularity(adjacency_pos, labels, resolution) 
+                    + get_directed_modularity(adjacency_neg, labels, resolution, nature = 'neg'))
                     gain = new_mod - old_mod
 
-                    if gain > best_gain:
+                    if best_gain is None or gain > best_gain:
                         best_gain = gain
+                        best_node = node
+                        best_label = label
+
+                elif (score == 'sum_mass'):
+                    new_mod = sum_mass(boost, "matrix", labels)(labels)
+                    labels[node] = old_label
+                    old_mod =sum_mass(boost, "matrix", labels)(labels)
+                    gain = new_mod - old_mod
+
+                    if best_gain is None or gain < best_gain:
+                        best_gain = gain
+                        best_node = node
                         best_label = label
 
 
-            if best_label != current_label:
-                labels[node] = best_label
-                moved = True
+        if best_node is not None and best_label != labels[best_node]:
+            labels[best_node] = best_label
+            moved = True
 
         if not moved:
-            break  # no improvement
+            break 
 
     return labels
+
+# convert each cluster of nodes into one big node 
+def collapse_graph(adjacency, labels):
+    #n = len(labels)
+    communities = np.unique(labels)
+    n_communities = len(communities)
+    label_map = {c: i for i, c in enumerate(communities)}
+    relabeled = np.array([label_map[l] for l in labels])
+
+    row, col, data = [], [], []
+
+    
+    adjacency = sparse.csr_matrix(adjacency)  
+    for i in range(adjacency.shape[0]):
+        for j in adjacency.indices[adjacency.indptr[i]:adjacency.indptr[i+1]]:
+            row.append(relabeled[i])
+            col.append(relabeled[j])
+            data.append(adjacency[i, j])
+
+    collapsed = sparse.coo_matrix((data, (row, col)), shape=(n_communities, n_communities))
+    return collapsed.tocsr()
+
+
+def recursive_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj,psm):
+    # phase 1 of algo: iterate through nodes, find best neighs
+    labels = homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj,psm)
+
+    # phase 2: collapse graph
+    communities = np.unique(labels)
+    if len(communities) == len(labels):
+        # each node is its own community → can't compress further
+        return labels
+
+    # collapse each type of mtx, TODO @Michelle think if we can do this differently
+    # for ex, collapse adj and then get subresults for pos/neg
+    collapsed_adj_pos = collapse_graph(adjacency_pos, labels)
+    collapsed_adj_neg = collapse_graph(adjacency_neg, labels)
+    collapsed_boost = collapse_graph(boost, labels) if boost is not None else None
+    collapsed_adj = collapse_graph(adj, labels) if adj is not None else None
+    collapsed_psm = collapse_graph(psm, labels) if psm is not None else None
+
+    # recur on the collapsed mtcs
+    new_labels = recursive_louvain(collapsed_adj_pos, collapsed_adj_neg, resolution, 
+                                   max_iter, score, collapsed_boost, collapsed_adj, collapsed_psm)
+
+    # backward convert, get labels for each candidate
+    final_labels = np.zeros_like(labels)
+    for i, c in enumerate(np.unique(labels)):
+        final_labels[labels == c] = new_labels[i]
+
+    return final_labels
+
     
 def create_graph_louvain_signed(boost: np.ndarray, pos: bool):
     n = boost.shape[0]
@@ -326,23 +379,24 @@ def labels_to_partitions(labels, candidates):
         clusters[label].append(candidate)
     return [clusters[k] for k in sorted(clusters.keys())]
 
-# resolution kept as 1, default green_diag
+# resolution kept as 1, default green_diag, aka standard modularity
 def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score='green_diagonal'):
     adj = fast_adj(profile)
+    psm = proportional_successive_matrix(profile)
     G_neg = create_graph_louvain_signed(boost, False)
     G_pos = create_graph_louvain_signed(boost, True)
     adj_pos = sparse.csr_matrix(nx.to_scipy_sparse_array(G_pos, weight='weight', format='csr'))
     adj_neg = sparse.csr_matrix(nx.to_scipy_sparse_array(G_neg, weight='weight', format='csr'))
-    labels = homemade_louvain(adj_pos, adj_neg, resolution,iter,score, boost,adj)
+    #labels = full_louvain(adj, adj_pos, adj_neg, resolution,iter,score, boost,adj)
+    labels = recursive_louvain(adj_pos, adj_neg, resolution,iter,score, boost,adj,psm)
     partition = labels_to_partitions(labels, list(profile.candidates))
     if score == 'green_diagonal':
         metric = get_directed_modularity(adj_pos, labels)
-    elif score == 'make_not_bad':
-        metric = make_not_bad(boost, labels, "matrix")(labels)
     elif score == 'make_good':
         metric = make_good(boost, labels, "matrix")(labels)
     elif score == 'hybrid':
-        metric = get_directed_modularity(adj_pos, labels)
-        +get_directed_modularity(adj_neg, labels, nature = 'neg')
+        metric = get_directed_modularity(adj_pos, labels) + get_directed_modularity(adj_neg, labels, nature = 'neg')
+    elif score == 'sum_mass':
+        metric = sum_mass(boost, "matrix",labels)(labels)
     return partition, metric
 
