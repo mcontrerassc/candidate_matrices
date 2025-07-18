@@ -220,7 +220,7 @@ def get_directed_modularity(adjacency, labels, resolution=1.0, nature = 'pos'):
 
 
 ## mother louvain -> for now can take 3 scores, Q+, make_good, make_not_bad
-def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj, psm):
+def homemade_louvain(adjacency_pos, adjacency_neg, resolution, score, boost, adj, psm):
     # get each candidate's neighs, considering pos and neg for adjecencies @michelle check this logic later!
     graph_structure = (adjacency_pos + adjacency_neg.T).astype(bool).astype(int).tocsr()
     neighbors_list = [ graph_structure.indices[graph_structure.indptr[i]:graph_structure.indptr[i+1]]
@@ -230,7 +230,8 @@ def homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, 
     #  each node in its own cluster
     labels = np.arange(n)
 
-    for i in range(max_iter):
+    #for i in range(max_iter):
+    while True:
         moved = False
         best_gain = 0
         best_node = None
@@ -328,9 +329,9 @@ def collapse_graph(adjacency, labels):
     return collapsed.tocsr()
 
 
-def recursive_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj,psm):
+def recursive_louvain(adjacency_pos, adjacency_neg, resolution, score, boost, adj,psm):
     # phase 1 of algo: iterate through nodes, find best neighs
-    labels = homemade_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score, boost, adj,psm)
+    labels = homemade_louvain(adjacency_pos, adjacency_neg, resolution, score, boost, adj,psm)
 
     # phase 2: collapse graph
     communities = np.unique(labels)
@@ -348,7 +349,7 @@ def recursive_louvain(adjacency_pos, adjacency_neg, resolution, max_iter, score,
 
     # recur on the collapsed mtcs
     new_labels = recursive_louvain(collapsed_adj_pos, collapsed_adj_neg, resolution, 
-                                   max_iter, score, collapsed_boost, collapsed_adj, collapsed_psm)
+                                score, collapsed_boost, collapsed_adj, collapsed_psm)
 
     # backward convert, get labels for each candidate
     final_labels = np.zeros_like(labels)
@@ -380,7 +381,7 @@ def labels_to_partitions(labels, candidates):
     return [clusters[k] for k in sorted(clusters.keys())]
 
 # resolution kept as 1, default green_diag, aka standard modularity
-def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score='green_diagonal'):
+def louvain_partition_signed_graph(boost, profile, resolution=1, score='green_diagonal'):
     adj = fast_adj(profile)
     psm = proportional_successive_matrix(profile)
     G_neg = create_graph_louvain_signed(boost, False)
@@ -388,7 +389,7 @@ def louvain_partition_signed_graph(boost, profile, resolution=1, iter=100, score
     adj_pos = sparse.csr_matrix(nx.to_scipy_sparse_array(G_pos, weight='weight', format='csr'))
     adj_neg = sparse.csr_matrix(nx.to_scipy_sparse_array(G_neg, weight='weight', format='csr'))
     #labels = full_louvain(adj, adj_pos, adj_neg, resolution,iter,score, boost,adj)
-    labels = recursive_louvain(adj_pos, adj_neg, resolution,iter,score, boost,adj,psm)
+    labels = recursive_louvain(adj_pos, adj_neg, resolution,score, boost,adj,psm)
     partition = labels_to_partitions(labels, list(profile.candidates))
     if score == 'green_diagonal':
         metric = get_directed_modularity(adj_pos, labels)
