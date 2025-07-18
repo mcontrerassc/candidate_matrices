@@ -448,18 +448,18 @@ def distance_to_slate_across_profile(profile: PreferenceProfile, partition):
     ballots_to_distance_second_slate = [distance_to_slate(ballot, partition[::-1]) for ballot in ballots]
     return max(sum(ballots_to_distance_first_slate), sum(ballots_to_distance_second_slate))
 
-def truncate_profile(profile: PreferenceProfile, L = 3):
+def truncate_profile(profile: PreferenceProfile, length = 3):
     new_ballots = []
     candidates = list(profile.candidates)
     candidate_to_index = {c: i for i, c in enumerate(candidates)}
     for ballot in profile.ballots:
         tup, w = bal_to_tuple(ballot, candidate_to_index)
-        new_tup = tup[:L]
+        new_tup = tup[:length]
         new_ballot = tuple_to_bal(new_tup, w, candidates)
         new_ballots.append(new_ballot)
-    return PreferenceProfile(ballots=tuple(new_ballots), candidates=candidates, max_ranking_length=3)
+    return PreferenceProfile(ballots=tuple(new_ballots), candidates=candidates, max_ranking_length=length)
 
 def truncated_boost(profile: PreferenceProfile, L = 3):
-    truncated_profile = truncate_profile(profile, L=L)
+    truncated_profile = truncate_profile(profile, length = L)
     boost = make_boost_matrix(truncated_profile)
     return np.nan_to_num(boost)
