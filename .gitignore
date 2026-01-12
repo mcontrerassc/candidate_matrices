@@ -3,3 +3,8 @@
 src/__pycache__/*
 src/.ipynb_checkpoints/*
 demo2.ipynb
+a_schmillion_runs.sh
+expand_kwargs.py
+gen_kwargs.py
+schmillion_cli.py
+schmillion_params.jsonl
