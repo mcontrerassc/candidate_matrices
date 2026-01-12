@@ -51,6 +51,28 @@ def fast_proposal_generator(partition8):
         return new_partition
     return fast_proposal
 
+def flip_proposal_generator(partition8):
+    k = max(partition8)
+    ncand = len(partition8)
+    def flip_proposal(partition):
+        new_partition = partition.copy()
+        cand_index = np.random.randint(0, ncand)
+        current_block = new_partition[cand_index]
+        other_blocks = [b for b in range(k+1) if b != current_block]
+        new_partition[cand_index] = np.random.choice(other_blocks)
+        return new_partition
+    return flip_proposal
+
+def two_slate_proposal_generator(partition8):
+    k = max(partition8)
+    ncand = len(partition8)
+    def two_slate_proposal(partition):
+        new_partition = partition.copy()
+        cand_index = np.random.randint(0, ncand)
+        new_partition[cand_index] = 1 - new_partition[cand_index]
+        return new_partition
+    return two_slate_proposal
+
 def tilted_run(profile: PreferenceProfile, partition, score_fn, proposal = naive_proposal,iterations=1000, beta=np.log(2)/10000, maximize = False):
     cur_score = score_fn(profile, partition)
     best_score = float(cur_score)
@@ -188,6 +210,23 @@ def fast_short_burst(starting_partition, score_fn, proposal_gen = fast_proposal_
                 status_quo = float(quo)
     return burst_best
 
+def two_slate_sort_and_backwards_convert(partition, score_fn, candidates):
+    status_quo = score_fn(partition)
+    slate_to_scores = {}
+    for slate in range(max(partition)+1):
+        scores = []
+        for cand in np.where(partition == slate)[0]:
+            trial_step = partition.copy()
+            trial_step[cand] = 1- trial_step[cand]
+            new_score = score_fn(trial_step)
+            scores.append(new_score)
+        slate_to_scores[slate] = scores
+    list_of_strings = backward_convert(partition, candidates)
+    for slate, scores in slate_to_scores.items():
+        sorted_bloc = [x for _, x in sorted(zip(scores, list_of_strings[slate]), reverse=(slate == 0))]
+        list_of_strings[slate] = sorted_bloc
+    return list_of_strings
+        
 def fast_short_burst2(
     starting_partition,
     score_fn,
