@@ -31,15 +31,30 @@ def old_show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None)
     plt.show()
 
 
-def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None, centered=False):
+def show_matrix(M, title=None, labels=None, cmap='viridis', boundaries=None, centered=False, log_scale=False):
     fig, ax = plt.subplots()
 
     if centered:
+        data = np.asarray(M)
+        max_abs = np.max(np.abs(data))
+        if max_abs == 0:
+            norm = None
+        elif log_scale:
+            # Symmetric log scaling around zero to make tiny deviations visible
+            linthresh = max(max_abs * 0.01, 1e-12)
+            norm = mcolors.SymLogNorm(
+                linthresh=linthresh,
+                linscale=1.0,
+                vmin=-max_abs,
+                vmax=max_abs,
+                base=10
+            )
+        else:
+            norm = mcolors.Normalize(vmin=-max_abs, vmax=max_abs)
+    else:
         vmin = np.min(M)
         vmax = np.max(M)
-        norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
-    else:
-        norm = None
+        norm = None if vmin == vmax else mcolors.Normalize(vmin=vmin, vmax=vmax)
 
     if title:
         plt.title(title)
